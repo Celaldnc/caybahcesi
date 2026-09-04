@@ -11,31 +11,9 @@ import {
   resolve,
 } from '../matcher';
 import { createTile } from '../tiles';
-import type { SlotRow, Tile, TileId } from '../types';
+import type { Tile } from '../types';
 
-/**
- * Test yardimcisi: kisa yazimla satir kurar.
- * '.' bos slot, digerleri tile id.
- *
- * Ornek: row('A', '.', 'A') -> [tile, null, tile]
- * Kisa adlar gercek TileId'lere eslenir; testler okunur kalsin diye.
- */
-const SHORT: Record<string, TileId> = {
-  A: 'cay-ince-belli',
-  B: 'kahve-fincan',
-  C: 'nazar-mavi',
-  D: 'lokum-sade',
-};
-
-function row(...cells: string[]): SlotRow {
-  return cells.map((cell) => (cell === '.' ? null : createTile(SHORT[cell] ?? 'vapur')));
-}
-
-/** Satiri kisa gosterime cevirir; iddialar okunur olsun diye. */
-function show(slots: SlotRow): string {
-  const reverse = new Map(Object.entries(SHORT).map(([short, id]) => [id, short]));
-  return slots.map((slot) => (slot === null ? '.' : (reverse.get(slot.id) ?? '?'))).join('');
-}
+import { SHORT, row, show } from './helpers/builders';
 
 describe('createEmptyRow', () => {
   it('istenen sayida bos slot uretir', () => {
@@ -141,7 +119,7 @@ describe('findRuns', () => {
   });
 
   it('MATCH.LENGTH sabitine uyar', () => {
-    const cells = Array.from({ length: MATCH.LENGTH }, () => 'A');
+    const cells = Array.from({ length: MATCH.LENGTH }, () => 'A' as const);
     expect(findRuns(row(...cells))).toHaveLength(1);
     expect(findRuns(row(...cells.slice(1)))).toEqual([]);
   });

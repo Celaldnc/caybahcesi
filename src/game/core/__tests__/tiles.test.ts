@@ -2,7 +2,9 @@ import { LEVEL } from '@/constants/config';
 
 import { createRng } from '../rng';
 import {
+  ALL_FAMILIES,
   ALL_TILE_IDS,
+  FAMILY_SHAPE,
   TILE_DEFINITIONS,
   createTile,
   getTileDefinition,
@@ -55,36 +57,86 @@ describe('TILE_DEFINITIONS', () => {
 
   /**
    * WCAG 1.4.1: bilgi yalnizca renkle aktarilamaz.
-   * Paletteki bazi renkler renk korlugu altinda ayirt edilemiyor
-   * (lokumPembe <-> fistikYesil protanopide 1.04:1), bu yuzden ayni ailedeki
-   * tile'lar FARKLI formlara sahip olmali.
+   *
+   * ONEMLI: bu bolum bir kez YANLIS EKSENDE yazilmisti. "Ayni ailedeki
+   * tile'lar farkli forma sahiptir" diye test ediyordu -- oysa `pickTilePool`
+   * aileler arasinda round-robin sectigi icin bir havuzda ASLA ayni aileden
+   * iki tile bulunmuyor. Yani test, oyunda hic gerceklesmeyen bir senaryoyu
+   * koruyordu; her zaman gerceklesen senaryo (9 farkli aileden 9 tile ayni
+   * anda tahtada) hic korunmuyordu. Olculdu: size-9 havuzlarin %99.83'unde
+   * form cakismasi vardi.
    */
   describe('renk korlugu erisilebilirligi', () => {
-    it('ayni ailedeki tile lar farkli formlara sahiptir', () => {
-      const byFamily = new Map<string, string[]>();
+    it('her ailenin tek bir formu vardir', () => {
       for (const id of ALL_TILE_IDS) {
         const def = getTileDefinition(id);
-        const list = byFamily.get(def.family) ?? [];
-        list.push(def.shape);
-        byFamily.set(def.family, list);
-      }
-
-      for (const [family, shapes] of byFamily) {
-        expect(new Set(shapes).size).toBe(shapes.length);
-        expect(family.length).toBeGreaterThan(0);
+        expect(def.shape).toBe(FAMILY_SHAPE[def.family]);
       }
     });
 
-    it('ayni ailedeki tile lar farkli renk token larina sahiptir', () => {
+    it('formlar aileler arasinda benzersizdir (bijeksiyon)', () => {
+      const shapes = Object.values(FAMILY_SHAPE);
+      expect(new Set(shapes).size).toBe(shapes.length);
+    });
+
+    it('form sayisi aile sayisindan az degildir', () => {
+      expect(new Set(Object.values(FAMILY_SHAPE)).size).toBeGreaterThanOrEqual(ALL_FAMILIES.length);
+    });
+
+    /**
+     * GUARD: bijeksiyonun tasidigi garanti "aile sayisi >= MAX_TILE_TYPES"
+     * kosuluna baglidir. Bu asilirsa round-robin ikinci tura gecer, ayni
+     * aileden iki tile havuza girer ve form garantisi SESSIZCE olur.
+     */
+    it('en fazla tile tipi sayisi aile sayisini asmaz', () => {
+      expect(LEVEL.MAX_TILE_TYPES).toBeLessThanOrEqual(ALL_FAMILIES.length);
+    });
+
+    it('ayni ailedeki tile lar farkli DOKU (pattern) kullanir', () => {
       const byFamily = new Map<string, string[]>();
       for (const id of ALL_TILE_IDS) {
         const def = getTileDefinition(id);
-        const list = byFamily.get(def.family) ?? [];
-        list.push(def.colorToken);
-        byFamily.set(def.family, list);
+        byFamily.set(def.family, [...(byFamily.get(def.family) ?? []), def.pattern]);
       }
-      for (const shades of byFamily.values()) {
-        expect(new Set(shades).size).toBe(shades.length);
+      for (const patterns of byFamily.values()) {
+        expect(new Set(patterns).size).toBe(patterns.length);
+      }
+    });
+
+    it('ayni ailedeki tile lar farkli renk yuvasi kullanir', () => {
+      const byFamily = new Map<string, string[]>();
+      for (const id of ALL_TILE_IDS) {
+        const def = getTileDefinition(id);
+        byFamily.set(def.family, [...(byFamily.get(def.family) ?? []), def.colorToken]);
+      }
+      for (const tokens of byFamily.values()) {
+        expect(new Set(tokens).size).toBe(tokens.length);
+      }
+    });
+
+    /**
+     * ASIL GARANTI: gercek oyun havuzunda form cakismasi OLMAMALI.
+     * Bu test, mutasyon denetiminde hayatta kalan M33'u de oldurur
+     * (round-robin yerine duz shuffle+slice konursa burada patlar).
+     */
+    it('uretilen her havuzda tum formlar farklidir', () => {
+      for (let size = 1; size <= LEVEL.MAX_TILE_TYPES; size++) {
+        for (let seed = 1; seed <= 200; seed++) {
+          const pool = pickTilePool(size, createRng(seed));
+          const shapes = pool.map((id) => getTileDefinition(id).shape);
+          expect(new Set(shapes).size).toBe(size);
+        }
+      }
+    });
+
+    it('uretilen her havuzda tum aileler farklidir', () => {
+      for (const size of [5, 7, 9]) {
+        for (let seed = 1; seed <= 200; seed++) {
+          const families = pickTilePool(size, createRng(seed)).map(
+            (id) => getTileDefinition(id).family,
+          );
+          expect(new Set(families).size).toBe(size);
+        }
       }
     });
   });
@@ -111,7 +163,7 @@ describe('createTile', () => {
   });
 
   it('key tile id sini icerir (hata ayiklamada okunabilir olsun)', () => {
-    expect(createTile('vapur').key).toContain('vapur');
+    expect(createTile('deniz-vapur').key).toContain('vapur');
   });
 
   it('bilinmeyen id reddedilir', () => {

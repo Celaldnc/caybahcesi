@@ -51,3 +51,6 @@ coverage/
 google-services.json
 GoogleService-Info.plist
 credentials.json
+
+# gecici kesif/olcum testleri (bkz. jest.config.js testPathIgnorePatterns)
+src/**/__tests__/zz-*

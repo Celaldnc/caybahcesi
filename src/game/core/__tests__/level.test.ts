@@ -23,6 +23,30 @@ describe('getLevelConfig', () => {
     expect(getLevelConfig(1).tileTypeCount).toBe(LEVEL.MIN_TILE_TYPES);
   });
 
+  /**
+   * MUTLAK egri testleri. Onceden yalnizca "monoton artiyor" ve "tam sayi"
+   * test ediliyordu; mutasyon denetimi gosterdi ki formulu
+   * `BASE + STEP*(L-1)` yerine `BASE + STEP*L` yapmak hicbir testi kirmiyor,
+   * yani tum egri bir basamak kaydirilabiliyordu.
+   */
+  it('level 1 in hedefi tam olarak taban skordur', () => {
+    expect(getLevelConfig(1).targetScore).toBe(LEVEL.BASE_TARGET_SCORE);
+  });
+
+  it('ardisik seviyeler arasindaki fark tam olarak adim degeridir', () => {
+    for (let n = 1; n < LEVEL.TOTAL; n++) {
+      expect(getLevelConfig(n + 1).targetScore - getLevelConfig(n).targetScore).toBe(
+        LEVEL.TARGET_SCORE_STEP,
+      );
+    }
+  });
+
+  it('son levelin hedefi formulle birebir uyusur', () => {
+    expect(getLevelConfig(LEVEL.TOTAL).targetScore).toBe(
+      LEVEL.BASE_TARGET_SCORE + LEVEL.TARGET_SCORE_STEP * (LEVEL.TOTAL - 1),
+    );
+  });
+
   it('son level tavan degerlere ulasir', () => {
     const last = getLevelConfig(LEVEL.TOTAL);
     expect(last.slotCount).toBe(SLOTS.MAX);
@@ -193,7 +217,9 @@ function movesToClear(levelNumber: number, seed: number, maxMoves: number): numb
 
 describe('property: her seviye gecilebilir', () => {
   const MOVE_BUDGET = 150;
-  const SEEDS = 8;
+  // 8'den 25'e cikarildi: core suite'in tamami ~3 sn'de kosuyor, tohum
+  // inceligini kapatmanin olculebilir bir maliyeti yok.
+  const SEEDS = 25;
 
   /**
    * Elle yazilmis 30 hedef skor yerine olculmus bir egri kullaniyoruz.

@@ -37,15 +37,25 @@ function slotCountFor(levelNumber: number): number {
   return Math.min(SLOTS.INITIAL + increases, SLOTS.MAX);
 }
 
-/** Level numarasindan tile tipi sayisi: MIN'den MAX'a dogrusal artis. */
+/**
+ * Level numarasindan tile tipi sayisi: MIN'den MAX'a dogrusal artis.
+ *
+ * Burada bir zamanlar `Math.min(count, slotCountFor(...))` clamp'i vardi.
+ * Kaldirildi, iki sebeple:
+ *  1. OLU: 30 seviyenin hicbirinde devreye girmiyordu (ham deger slot
+ *     sayisini hicbir zaman asmiyor; L20'de 8=8, L27-30'da 9=9).
+ *  2. GEREKCESI YANLISTI: "tip sayisi slot sayisini asarsa uclu kurmak
+ *     imkansizlasir" diyordu. Pigeonhole matematigi bunu desteklemiyor --
+ *     T tip / S slot icin bir CIFT garantisi T < S, bir UCLU garantisi
+ *     S > 2T gerektirir. L30'da T = S = 9, yani 9 slotun tamami farkli
+ *     tiple dolabilir; clamp bunu zaten engellemiyordu.
+ * Gercek emniyet agi generator'un SAFETY (ilerleme) katmani; sinir ise
+ * level.test.ts'teki `tileTypeCount <= slotCount` invariant'i ile korunuyor.
+ */
 function tileTypeCountFor(levelNumber: number): number {
   const span = LEVEL.MAX_TILE_TYPES - LEVEL.MIN_TILE_TYPES;
   const progress = (levelNumber - 1) / (LEVEL.TOTAL - 1);
-  const count = LEVEL.MIN_TILE_TYPES + Math.round(span * progress);
-
-  // Tip sayisi slot sayisini asamaz: asarsa tahtada hicbir tip iki kez
-  // bulunmayabilir ve uclu kurmak imkansizlasir.
-  return Math.min(count, slotCountFor(levelNumber));
+  return LEVEL.MIN_TILE_TYPES + Math.round(span * progress);
 }
 
 /** Level numarasindan hedef skor. */

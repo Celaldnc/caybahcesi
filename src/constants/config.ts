@@ -19,27 +19,25 @@ export const TRAY = {
   VISIBLE: 3,
 
   /**
-   * "Kurtarma" esigi: bu kadar veya daha az bos slot kaldiginda uretici,
-   * mumkunse tray'e eslesme tamamlayabilen bir tile koymak ZORUNDADIR.
-   *
-   * Bu, spec'teki "no-stuck-state" garantisinin somut hali. 2 secildi:
-   * oyuncuya bir hamle manevra payi birakir, ama kurtarmayi da geciktirmez.
-   */
-  RESCUE_THRESHOLD: 2,
-
-  /**
    * "Guvenlik" esigi: bu kadar veya daha az bos slot kaldiginda uretici,
-   * tray'e en azindan ILERLEME saglayan bir tile koymak zorundadir.
+   * tray'e ILERLEME saglayan bir tile koymak ZORUNDADIR.
+   * Ilerleme = ya uclu tamamlar (kurtarma) ya da tahtadaki bir tile'in
+   * yanina konup bitisik CIFT olusturur.
    *
-   * Neden RESCUE tek basina yetmiyor: kurtarma ancak bir uclu TAMAMLANABILIYORSA
-   * mumkundur. Tahtada hicbir bitisik cift yoksa hicbir tek tile uclu yapamaz --
-   * yani kurtarma esigine gelindiginde is isten gecmis olur. Olculdu: bu katman
-   * olmadan oyuncu bazi tohumlarda 7 hamlede, kendi hatasi olmadan kaybediyordu.
+   * Bu, spec'teki "no-stuck-state" garantisinin somut hali ve OLCUME GORE
+   * oyunun tek tasiyici sabiti: kapatildiginda kusursuz oyuncu bile %100
+   * kaybediyor. Neden yalnizca "kurtarma" yetmiyor: kurtarma ancak tahtada
+   * uygun bir kalip (bitisik cift ya da X_X) varsa mumkundur; tahta tamamen
+   * farkli tiplerden olusuyorsa is isten gecmis olur -- olculdu, oyuncu bazi
+   * tohumlarda 7 hamlede, kendi hatasi olmadan kaybediyordu.
    *
-   * Ilerleme = ya uclu tamamlar ya da tahtadaki bir tile'in yanina konup
-   * bitisik CIFT olusturur.
+   * Deger olcumle secildi (400 tohum, hata orani p ile parametrize oyuncu):
+   *   esik 3 -> %10 hatali oyuncunun kaybi %62.8 (7/5) / %88.5 (9/9)
+   *   esik 5 -> %9.3 / %9.8
+   * Kusursuz oyuncu her iki degerde de %0 kaybediyor; fark tamamen yeni
+   * oyuncunun lehine.
    */
-  SAFETY_THRESHOLD: 3,
+  SAFETY_THRESHOLD: 5,
 
   /**
    * Tahtada zaten bulunan bir tipin tekrar uretilme olasiligi.
@@ -72,8 +70,25 @@ export const SCORE = {
   COMBO_STEP: 1,
   /** Combo carpaninin ust siniri (sonsuz buyumeyi engeller). */
   COMBO_MAX: 5,
-  /** Level bitiminde satir tamamen bossa verilen bonus. */
-  PERFECT_SORT_BONUS: 50,
+  /**
+   * Satiri TAMAMEN bosaltan her eslesme icin verilen bonus.
+   *
+   * DIKKAT -- bu "level sonu" bonusu DEGIL, her tam temizlemede verilir ve
+   * oyun basina 1.8-2.4 kez tetiklenir. Bir donem yorumu "level bitiminde"
+   * diyordu; kod hep boyle davraniyordu, yorum yanlisti.
+   *
+   * Bu sabit oyunun ZORLUK EGRISININ TA KENDISI. Olculdu: eslesme orani
+   * korunum geregi 1/3'e cividir (hamle basina 1 tile girer, eslesme basina
+   * 3 cikar) ve slot/tip sayisindan BAGIMSIZDIR. Dolayisiyla
+   *   puan/hamle = BASE_PER_MATCH x (1/3) + PERFECT_SORT_BONUS x temizleme_orani
+   * ve seviyeler arasi tek degisken temizleme oranidir. Bonus 0 yapilirsa
+   * puan hizi her seviyede sabit 3.3 olur ve zorluk egrisi tamamen kaybolur.
+   *
+   * 50 -> 25 dusuruldu: 50'de skorun %69.8'ini tek basina uretiyordu ve
+   * oturum suresi varyansini (p90/p50) 2.56'ya cikariyordu. 25'te pay ~%53,
+   * varyans ~1.4.
+   */
+  PERFECT_SORT_BONUS: 25,
 } as const;
 
 /** Level ilerlemesi: zorluk egrisinin sinirlari. */
@@ -91,13 +106,17 @@ export const LEVEL = {
   /**
    * Level 1'in hedef skoru.
    *
-   * Olculdu: 7 slot + 5 tip yapilandirmasinda oyuncu UZUN VADEDE hamle
-   * basina ~11 puan topluyor, ama acilis hamleleri puan getirmez (once
-   * tahtayi kurman gerekir). Gercek olcum: 120 puan ~20-25 hamle, yani
-   * ~30-40 saniyelik bir ilk oturum. Ilk seviye hizli ve cesaretlendirici
-   * olsun diye bilerek dusuk tutuldu.
+   * PERFECT_SORT_BONUS 25'e ve SAFETY_THRESHOLD 5'e gore YENIDEN TURETILDI.
+   * Onceki 120 degeri, bonusun 50 oldugu (ve skorun %70'ini urettigi) bir
+   * dunyada olculmustu; o dunyada level 1 medyan 13.5 saniyede bitiyordu --
+   * spec'in 30-90 sn hedef bandinin yarisi kadar.
+   *
+   * Yeni set (bonus 25 / safety 5 / taban 190 / adim 4) ile olculen sonuc:
+   *   lvl  1  p50 31.5 sn   lvl 10  p50 36.0 sn
+   *   lvl 20  p50 58.5 sn   lvl 30  p50 87.0 sn
+   * 30 seviyenin 30'u da p50 olarak 30-90 sn bandinda (onceki set: 20/30).
    */
-  BASE_TARGET_SCORE: 120,
+  BASE_TARGET_SCORE: 190,
 
   /**
    * Her levelde hedef skorun artisi.
@@ -194,4 +213,29 @@ export const OPACITY = {
 /** Ikon olculeri. */
 export const ICON = {
   tab: 28,
+} as const;
+
+/**
+ * Tile uretim agirliklari.
+ *
+ * DoD "ciplak sayi yok" kurali geregi tiles.ts'teki 25 tanimda literal
+ * yerine bu token'lar kullanilir.
+ *
+ * Aralik OLCUME GORE genisletildi. Onceki 5-10 araligi yalanci bir ayar
+ * dugmesiydi: gercek agirliklarla tamamen duz agirlik (hepsi 8) arasindaki
+ * fark %1.2 olculdu -- tohum gurultusunun altinda. Sebep iki katmanli
+ * seyrelme: `pickTilePool` aileye round-robin dagittigi icin havuz ici
+ * maks/min oran ~1.8'de kaliyor, ustelik cekimlerin %55'i zaten
+ * TRAY.BOARD_BIAS ile tahtadan geliyor ve agirliga hic ugramiyor.
+ * 3-12 araligi kolu olculebilir hale getirir.
+ */
+export const TILE_WEIGHT = {
+  /** Tema merkezindeki nesneler (cay, simit). */
+  HERO: 12,
+  /** Sik gorulen nesneler. */
+  COMMON: 9,
+  /** Standart. */
+  NORMAL: 6,
+  /** "Ozel" nesneler (vapur, kayik, balik). */
+  RARE: 3,
 } as const;

@@ -2,18 +2,9 @@ import { MATCH, SCORE } from '@/constants/config';
 
 import { createEmptyRow, resolve } from '../matcher';
 import { comboMultiplier, computeScore, runPoints } from '../score';
-import { createTile } from '../tiles';
-import type { ResolveResult, SlotRow, TileId } from '../types';
+import type { ResolveResult } from '../types';
 
-const SHORT: Record<string, TileId> = {
-  A: 'cay-ince-belli',
-  B: 'kahve-fincan',
-  C: 'nazar-mavi',
-};
-
-function row(...cells: string[]): SlotRow {
-  return cells.map((cell) => (cell === '.' ? null : createTile(SHORT[cell] ?? 'vapur')));
-}
+import { row } from './helpers/builders';
 
 /** Eslesmesiz bos sonuc; kenar durum testlerinde kullanilir. */
 const EMPTY_RESULT: ResolveResult = {

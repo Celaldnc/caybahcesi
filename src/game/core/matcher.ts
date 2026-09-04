@@ -70,9 +70,13 @@ export function findRuns(row: SlotRow): readonly MatchRun[] {
 
   let index = 0;
   while (index < row.length) {
-    const slot = row[index];
+    // KONVANSIYON: indis kanitlanabilir sekilde sinir icindeyse `!` kullan.
+    // `index < row.length` oldugu icin undefined imkansiz; yalnizca null
+    // anlamli. Ulasilamaz bir `undefined` dali eklemek test edilemez olu kod
+    // uretir ve branch coverage'i yaniltir (bkz. CLAUDE.md).
+    const slot = row[index]!;
 
-    if (slot === undefined || slot === null) {
+    if (slot === null) {
       index++;
       continue;
     }
@@ -80,8 +84,8 @@ export function findRuns(row: SlotRow): readonly MatchRun[] {
     // Ayni tipteki ardisik tile'lari say.
     let end = index + 1;
     while (end < row.length) {
-      const next = row[end];
-      if (next === undefined || next === null || next.id !== slot.id) break;
+      const next = row[end]!;
+      if (next === null || next.id !== slot.id) break;
       end++;
     }
 

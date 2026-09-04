@@ -9,8 +9,8 @@ import type { SlotRow, Tile, TileId, Tray } from './types';
  * Tray uretici -- "no-stuck-state" garantisinin sahibi.
  *
  * Uc katmanli davranis:
- *  1. KURTARMA (zorunlu): bos slot sayisi RESCUE_THRESHOLD'a dustugunde ve
- *     bir eslesme tamamlamak MUMKUNSE, tray o tile'i icermek zorundadir.
+ *  1. ILERLEME (zorunlu): bos slot sayisi SAFETY_THRESHOLD'a dustugunde tray,
+ *     ya uclu tamamlayan ya da bitisik cift kuran bir tile ICERMEK ZORUNDA.
  *     Oyuncu kendi hatasi olmadan, sirf sansizlik yuzunden kaybetmemeli.
  *  2. TAHTA YANLILIGI: tile'larin bir kismi tahtada ZATEN bulunan tiplerden
  *     secilir. Duz agirlikli rastgele uretim, 9 tipli bir havuzda eslesmeyi
@@ -82,8 +82,25 @@ export function findProgressTileIds(row: SlotRow, pool: readonly TileId[]): read
   return rescue.length > 0 ? rescue : findPairBuildingTileIds(row, pool);
 }
 
+/**
+ * En az bir eleman iceren havuz.
+ *
+ * Bos-havuz sorununu CALISMA ZAMANI kontrolu yerine TIPE tasiyoruz. Boylece
+ * ne ulasilamaz bir `throw` (test edilemez olu kod) ne de sessiz bozulma
+ * (`pool[0]` undefined donup TileId gibi davranmasi) kaliyor: derleyici
+ * bos havuzla cagrilmayi engelliyor.
+ */
+type NonEmptyPool = readonly [TileId, ...TileId[]];
+
+/** Havuzun bos olmadigini hem calisma zamaninda hem TIPTE garanti eder. */
+function assertNonEmptyPool(pool: readonly TileId[]): asserts pool is NonEmptyPool {
+  if (pool.length === 0) {
+    throw new RangeError('Tile havuzu bos olamaz.');
+  }
+}
+
 /** Tanimlardaki `weight` degerlerine gore havuzdan bir tip secer. */
-function pickWeighted(pool: readonly TileId[], rng: Rng): TileId {
+function pickWeighted(pool: NonEmptyPool, rng: Rng): TileId {
   const totalWeight = pool.reduce((sum, id) => sum + getTileDefinition(id).weight, 0);
   let threshold = rng.next() * totalWeight;
 
@@ -91,7 +108,8 @@ function pickWeighted(pool: readonly TileId[], rng: Rng): TileId {
   // yuvarlamasi esigi hic sifirlamasa bile son eleman secilmis olur.
   // (Ulasilamaz bir `return` satiri birakmak yerine bu kalip tercih edildi:
   // olu kod test edilemez ve coverage'i yaniltir.)
-  let chosen = pool[0]!;
+  // pool[0] tip geregi mevcut -- NonEmptyPool, assertion gerekmiyor.
+  let chosen: TileId = pool[0];
   for (const id of pool) {
     chosen = id;
     threshold -= getTileDefinition(id).weight;
@@ -111,7 +129,7 @@ function pickFromBoard(row: SlotRow, pool: readonly TileId[], rng: Rng): TileId 
 }
 
 /** Tek bir tile tipi secer: once tahta yanliligi, sonra agirlikli rastgele. */
-function pickTileId(row: SlotRow, pool: readonly TileId[], rng: Rng): TileId {
+function pickTileId(row: SlotRow, pool: NonEmptyPool, rng: Rng): TileId {
   if (rng.next() < TRAY.BOARD_BIAS) {
     const fromBoard = pickFromBoard(row, pool, rng);
     if (fromBoard !== null) return fromBoard;
@@ -127,15 +145,21 @@ function trayCovers(tray: readonly Tile[], candidates: readonly TileId[]): boole
 /**
  * Tray'e ZORUNLU olarak konmasi gereken tile tipini secer; gerek yoksa null.
  *
- * Iki asamali:
- *  1. Kurtarma esigi -- uclu tamamlayabilen bir tile varsa onu ver.
- *  2. Guvenlik esigi -- kurtarma imkansizsa, en azindan bitisik cift
- *     kurabilen bir tile ver.
+ * TEK esik, iki oncelik: `findProgressTileIds` once kurtarma (uclu tamamlama)
+ * tiplerini dondurur, kurtarma imkansizsa cift kurma tiplerine duser.
  *
- * Ikinci asama sart: kurtarma ancak tahtada uygun bir kalip varsa mumkun.
- * Tahta tamamen farkli tiplerden olusuyorsa kurtarma esigine gelindiginde
- * is isten gecmis olur (olculdu: bu katman olmadan bazi tohumlarda oyuncu
- * 7 hamlede, kendi hatasi olmadan kaybediyordu).
+ * Neden cift kurma katmani sart: kurtarma ancak tahtada uygun bir kalip
+ * (bitisik cift ya da X_X) varsa mumkun. Tahta tamamen farkli tiplerden
+ * olusuyorsa kurtarma esigine gelindiginde is isten gecmis olur -- olculdu:
+ * bu katman olmadan oyuncu bazi tohumlarda 7 hamlede, kendi hatasi olmadan
+ * kaybediyordu.
+ *
+ * TARIHCE: burada once ayri bir RESCUE_THRESHOLD (=2) esigi vardi. Iki
+ * bagimsiz denge olcumu onun DAVRANISSAL OLARAK OLU oldugunu gosterdi:
+ * SAFETY >= RESCUE oldugu ve `findProgressTileIds` zaten kurtarmayi
+ * onceledigi icin ayri dal hicbir zaman farkli sonuc uretmiyordu
+ * (300 oyunda esige 561 kez gelindi, iki kume 561/561 esitti).
+ * Yalanci ayar dugmesi birakmamak icin kaldirildi.
  */
 function chooseForcedTileId(
   row: SlotRow,
@@ -143,31 +167,24 @@ function chooseForcedTileId(
   pool: readonly TileId[],
   rng: Rng,
 ): TileId | null {
-  const empty = countEmpty(row);
+  if (countEmpty(row) > TRAY.SAFETY_THRESHOLD) return null;
 
-  if (empty <= TRAY.RESCUE_THRESHOLD) {
-    const rescueIds = findRescueTileIds(row, pool);
-    if (rescueIds.length > 0 && !trayCovers(tray, rescueIds)) {
-      return rng.pick(rescueIds);
-    }
-  }
+  const progressIds = findProgressTileIds(row, pool);
+  if (progressIds.length === 0 || trayCovers(tray, progressIds)) return null;
 
-  if (empty <= TRAY.SAFETY_THRESHOLD) {
-    const progressIds = findProgressTileIds(row, pool);
-    if (progressIds.length > 0 && !trayCovers(tray, progressIds)) {
-      return rng.pick(progressIds);
-    }
-  }
-
-  return null;
+  return rng.pick(progressIds);
 }
 
 /**
  * Tray'i hedef boyuta tamamlar.
  *
  * Mevcut tile'lar korunur ve sirasi bozulmaz (ekranda yerleri sabit kalsin).
- * Zorunluluk, tamamlanmis tray'in TAMAMI uzerinden degerlendirilir: elde
- * zaten uygun bir tile varsa yenisini zorlamaya gerek yok.
+ *
+ * Zorunluluk MEVCUT tray uzerinden degerlendirilir (doldurmadan ONCE), yeni
+ * eklenenler uzerinden degil. Bu muhafazakar yon: rastgele doldurmanin zaten
+ * uretecegi bir tile'i bazen gereksiz yere zorlar, ama garantiyi asla
+ * zayiflatmaz. Ters sira (doldurup sonra bakmak) cesitliligi korurdu fakat
+ * no-stuck-state garantisini olasiliga baglardi -- kabul edilemez.
  */
 export function refillTray(
   row: SlotRow,
@@ -176,9 +193,7 @@ export function refillTray(
   rng: Rng,
   size: number = TRAY.VISIBLE,
 ): Tray {
-  if (pool.length === 0) {
-    throw new RangeError('Tile havuzu bos olamaz.');
-  }
+  assertNonEmptyPool(pool);
   if (!Number.isInteger(size) || size <= 0) {
     throw new RangeError(`Tray boyutu pozitif tam sayi olmali, alinan: ${size}`);
   }

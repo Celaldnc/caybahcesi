@@ -55,13 +55,8 @@ describe('config invariant sozlesmeleri', () => {
       expect(MATCH.LENGTH).toBe(3);
     });
 
-    it('kurtarma esigi slot sayisindan kucuktur (yoksa her zaman tetiklenir)', () => {
-      expect(TRAY.RESCUE_THRESHOLD).toBeGreaterThan(0);
-      expect(TRAY.RESCUE_THRESHOLD).toBeLessThan(SLOTS.INITIAL);
-    });
-
-    it('guvenlik esigi kurtarma esiginden genistir (once ilerleme, sonra kurtarma)', () => {
-      expect(TRAY.SAFETY_THRESHOLD).toBeGreaterThan(TRAY.RESCUE_THRESHOLD);
+    it('guvenlik esigi anlamli bir aralikta (0 = kapali, slot sayisi = her zaman acik)', () => {
+      expect(TRAY.SAFETY_THRESHOLD).toBeGreaterThan(0);
       expect(TRAY.SAFETY_THRESHOLD).toBeLessThan(SLOTS.INITIAL);
     });
 

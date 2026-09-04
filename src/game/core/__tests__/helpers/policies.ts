@@ -25,8 +25,8 @@ export type Policy = (row: SlotRow, tray: readonly Tile[], rng: Rng) => Move | n
 /** Hemen eslesme yaratan ilk hamle. */
 function findMatchingMove(row: SlotRow, tray: readonly Tile[]): Move | null {
   for (let tileIndex = 0; tileIndex < tray.length; tileIndex++) {
-    const tile = tray[tileIndex];
-    if (tile === undefined) continue;
+    // tileIndex < tray.length -> undefined imkansiz (bkz. CLAUDE.md konvansiyonu).
+    const tile = tray[tileIndex]!;
 
     for (const slotIndex of emptyIndices(row)) {
       if (resolve(placeTile(row, slotIndex, tile)).removedCount > 0) {
@@ -40,8 +40,7 @@ function findMatchingMove(row: SlotRow, tray: readonly Tile[]): Move | null {
 /** Ayni tipin bitisigine koyarak cift kuran ilk hamle. */
 function findPairBuildingMove(row: SlotRow, tray: readonly Tile[]): Move | null {
   for (let tileIndex = 0; tileIndex < tray.length; tileIndex++) {
-    const tile = tray[tileIndex];
-    if (tile === undefined) continue;
+    const tile = tray[tileIndex]!;
 
     for (const slotIndex of emptyIndices(row)) {
       const left = row[slotIndex - 1];
@@ -113,8 +112,9 @@ export function playGame(options: GameOptions): GameResult {
     const move = options.policy(row, tray, rng);
     if (move === null) break;
 
-    const tile = tray[move.tileIndex];
-    if (tile === undefined) break;
+    // Politika yalnizca gecerli bir tileIndex dondurmelidir; sozlesme
+    // helpers.test.ts'te dogrulaniyor.
+    const tile = tray[move.tileIndex]!;
 
     const result = resolve(placeTile(row, move.slotIndex, tile));
     score += computeScore(result).total;
