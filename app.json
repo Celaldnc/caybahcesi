@@ -23,8 +23,11 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "single",
+      "favicon": "./assets/images/favicon.png",
+      "lang": "tr",
+      "name": "Çay Bahçesi Topla",
+      "shortName": "Çay Bahçesi"
     },
     "plugins": [
       "expo-router",
@@ -50,6 +53,7 @@
     "experiments": {
       "typedRoutes": true
     },
-    "primaryColor": "#7B2E1D"
+    "primaryColor": "#7B2E1D",
+    "backgroundColor": "#FBF6EF"
   }
 }

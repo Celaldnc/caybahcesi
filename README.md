@@ -44,6 +44,7 @@ npm start          # QR kodu Expo Go ile okut
 ```
 
 Web önizleme (hızlı göz kontrolü, birincil hedef değil): `npm run web`
+Web `output: "single"` (SPA) modunda — sunucu render'ı ve hidrasyon yok.
 
 ## Komutlar
 
@@ -67,7 +68,6 @@ Web önizleme (hızlı göz kontrolü, birincil hedef değil): `npm run web`
 src/
 ├── app/                  # Expo Router ekranları (dosya-tabanlı yönlendirme)
 │   ├── _layout.tsx       # Kök: GestureHandlerRootView + tema + splash
-│   ├── +html.tsx         # Web statik render kabuğu
 │   ├── +not-found.tsx
 │   └── (tabs)/           # index (oyun) + settings
 ├── game/
@@ -77,7 +77,7 @@ src/
 │   ├── store/            # Zustand                              (Sprint 2)
 │   ├── audio/            # expo-audio sarmalayıcı               (Sprint 3)
 │   └── data/             # Tile tanımları, level configleri     (Sprint 1/3)
-├── components/           # Button, Screen, Themed, hook'lar
+├── components/           # Button, Screen, Themed, useColorScheme
 ├── hooks/                #                                      (Sprint 2)
 └── constants/
     ├── colors.ts         # Palette (ham) + Colors (anlamsal token)
@@ -118,7 +118,7 @@ Kontrast oranları WCAG 2.1 relative luminance formülüyle ölçüldü. Button 
 
 `src/constants/**` kapsam dışıdır: saf `as const` veri, herhangi bir test import ettiği anda %100 olur ve hiçbir mantık doğrulamadan yüzdeyi şişirir. İçeriğini [config.test.ts](src/constants/__tests__/config.test.ts) invariant sözleşmeleri korur.
 
-**Başka dışlama yoktur** — ekranlar dahil tüm `src/` ölçülüyor.
+**Başka dışlama yoktur** — ekranlar dahil tüm `src/` ölçülüyor. Kapsanmayan tek şey, devre dışı "Oyna" butonunun Sprint 2'de bağlanacak boş `onPress`'i.
 
 ---
 

@@ -37,7 +37,13 @@ Appearance.js:76      let colorScheme = null                 <- kaynağı
 
 ### `useSyncExternalStore`: `getSnapshot` referansı kararlı olmalı
 
-`() => client` yazarsan ve çağıran obje/dizi geçerse, `Object.is` her render'da farklı referans görür → `forceStoreRerender` → **sonsuz döngü**. React'in "getSnapshot should be cached" DEV uyarısı bu durumda **ateşlenmez** (aynı render'daki iki çağrı aynı referansı döner) — sessiz donma. Çözüm: anlık görüntü **boolean** olsun, üç fonksiyon da modül seviyesinde sabit ([useClientOnlyValue.web.ts](src/components/useClientOnlyValue.web.ts)).
+`() => client` yazarsan ve çağıran obje/dizi geçerse, `Object.is` her render'da farklı referans görür → `forceStoreRerender` → **sonsuz döngü**. React'in "getSnapshot should be cached" DEV uyarısı bu durumda **ateşlenmez** (aynı render'daki iki çağrı aynı referansı döner) — sessiz donma. Anlık görüntü daima **boolean/primitif** olsun ve `subscribe`/`getSnapshot` modül seviyesinde sabit tutulsun. (Bu tuzağa düşen `useClientOnlyValue` SPA geçişiyle tamamen silindi; kural Sprint 2'de store yazarken geçerli.)
+
+### Web `output: "single"` (SPA) — `+html.tsx` çalışmaz
+
+`web.output` `single` iken Expo kendi `index.html`'ini üretir; `+html.tsx` **hiç okunmaz** (deneysel olarak doğrulandı: export çıktısında `+html.tsx`'teki renk yok). HTML kabuğunu özelleştirmek için `app.json` → `web.*` anahtarlarını kullan:
+`lang: "tr"` gerçekten `<html lang="tr">` üretir. `web.backgroundColor` ise SPA çıktısında karşılıksızdır (PWA manifest üretilmiyor) — üst seviye `expo.backgroundColor` kullan, `expo-system-ui` ile native'de de çalışır.
+Aynı sebeple hidrasyon yoktur: `useClientOnlyValue` gibi "sunucuda X, istemcide Y" sarmalayıcılarına gerek yok.
 
 ### Reanimated 4: babel plugin'i elle **ekleme**
 
@@ -90,8 +96,8 @@ Düz string olarak yazılırsa Android'e `RECORD_AUDIO` + `FOREGROUND_SERVICE`, 
   - `uuid` ← `xcode` ← `@expo/config-plugins`: gerçekten **yalnızca build-time** (prebuild/Node), Metro'ya girmiyor.
   - `decode-uri-component` ← `query-string` ← `expo-router`: **bundle'a giriyor** (expo-router runtime modülleri modül seviyesinde `require` ediyor). Ancak açık yalnızca `parse()` yolundan erişilebilir ve expo-router o fonksiyonu fork'layıp native `URLSearchParams`'a çevirmiş — çağrılmıyor. Yani _sömürülebilir değil, ama "build-time only" de değil_: gemide taşınan ölü kod. Uygulama kodundan **asla** `queryString.parse` çağırma.
   - `npm audit fix --force` Expo'yu kırar — **çalıştırma**.
-- **Kalan coverage boşlukları** (bilinçli): `(tabs)/index.tsx`'teki devre dışı butonun boş `onPress`'i (Sprint 2'de bağlanacak) ve `useClientOnlyValue.web.ts`'teki `getServerSnapshot` dalı (gerçek SSR render'ı gerektirir → jest-expo çok-platformlu `projects` kurulumu, Sprint 3).
-- **Web ikincil hedeftir.** `npm run web` hızlı göz kontrolü için. `useColorScheme.web.ts` silindi — react-native-web'in kendi implementasyonu zaten doğru çalışıyor, override onu bozuyordu.
+- **Kalan tek coverage boşluğu** (bilinçli): `(tabs)/index.tsx`'teki devre dışı butonun boş `onPress`'i — Sprint 2'de router'a bağlanacak.
+- **Web ikincil hedeftir, SPA modunda.** `npm run web` hızlı göz kontrolü için; birincil hedef iOS + Android. `output: "single"` seçildi → sunucu render'ı ve hidrasyon yok. Bu sayede `+html.tsx`, `useClientOnlyValue` (native + web) ve `useColorScheme.web.ts` dosyalarının hepsi silindi; jest-expo çok-platformlu `projects` kurulumu ihtiyacı da ortadan kalktı.
 
 ## Komutlar
 

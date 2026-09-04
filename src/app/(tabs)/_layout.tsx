@@ -2,7 +2,6 @@ import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import type { ReactElement } from 'react';
 
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/colors';
 import { ICON } from '@/constants/config';
@@ -16,8 +15,10 @@ export default function TabLayout(): ReactElement {
       screenOptions={{
         tabBarActiveTintColor: theme.tint,
         tabBarInactiveTintColor: theme.tabIconDefault,
-        // Web'de statik render'i kapat: React Navigation hidrasyon hatasini onler.
-        headerShown: useClientOnlyValue(false, true),
+        // web.output "single" (SPA): sunucu render'i yok, dolayisiyla hidrasyon
+        // uyusmazligi da yok. Expo template'inin useClientOnlyValue sarmalayicisi
+        // yalnizca statik render icin gerekliydi; kaldirildi.
+        headerShown: true,
       }}
     >
       <Tabs.Screen
