@@ -72,3 +72,63 @@ export const STORAGE_KEYS = {
   SOUND_ENABLED: 'cb.soundEnabled',
   HAPTICS_ENABLED: 'cb.hapticsEnabled',
 } as const;
+
+// ---------------------------------------------------------------------------
+// UI olcu token'lari
+//
+// DoD "ciplak sayi birakma" kurali StyleSheet icin de gecerli: 24 bes dosyada,
+// 0.7 iki dosyada tekrar ediyordu. Tek bir olcek olmadan her ekran kendi
+// fontSize/padding kararini veriyor ve tasarim sessizce dagiliyor.
+// ---------------------------------------------------------------------------
+
+/** 4'un katlarina dayali bosluk olcegi. */
+export const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 20,
+  xl: 24,
+} as const;
+
+/** Tipografi olcegi (punto). */
+export const TYPO = {
+  /** Ana ekran basligi. */
+  title: 32,
+  /** Ekran basligi. */
+  heading: 24,
+  /** Alt baslik / 404 basligi. */
+  subheading: 20,
+  /** Buton etiketi. */
+  button: 17,
+  /** Govde metni. */
+  body: 16,
+  /** Ipucu / yardimci metin. */
+  caption: 14,
+} as const;
+
+/** Yazi kalinliklari. Tutarlilik icin string olarak sabitlendi ('bold' ve '700' karisimi olmasin). */
+export const WEIGHT = {
+  regular: '400',
+  semibold: '600',
+  bold: '700',
+} as const;
+
+/** Kose yaricaplari. */
+export const RADIUS = {
+  button: 14,
+} as const;
+
+/** Saydamlik degerleri. */
+export const OPACITY = {
+  /** Basili durum geri bildirimi. */
+  pressed: 0.75,
+  /** Devre disi kontrol. 0.4 kontrasti 2.15:1'e dusuruyordu; 0.55 okunur tutuyor. */
+  disabled: 0.55,
+  /** Yardimci/ikincil metin. */
+  muted: 0.7,
+} as const;
+
+/** Ikon olculeri. */
+export const ICON = {
+  tab: 28,
+} as const;

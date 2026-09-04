@@ -23,7 +23,9 @@ export function useThemeColor(
   const theme = useColorScheme();
   const colorFromProps = props[theme];
 
-  if (colorFromProps) {
+  // != null : bos string ('') gecerli bir override'dir ve tema rengine
+  // dusmemelidir. Truthiness kontrolu onu sessizce yutuyordu.
+  if (colorFromProps != null) {
     return colorFromProps;
   } else {
     return Colors[theme][colorName];

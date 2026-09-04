@@ -1,39 +1,42 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { ReactNode } from 'react';
 
-// This file is web-only and used to configure the root HTML for every
-// web page during static rendering.
-// The contents of this function only run in Node.js environments and
-// do not have access to the DOM or browser APIs.
+import { Palette } from '@/constants/colors';
+
+// Bu dosya yalnizca web icindir ve statik render sirasinda her sayfanin kok
+// HTML'ini yapilandirir. Icerigi sadece Node.js ortaminda calisir; DOM veya
+// tarayici API'lerine erisimi yoktur.
 export default function Root({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // lang="tr": WCAG 3.1.1. Ekran okuyucu Turkce metni dogru telaffuz motoruyla
+    // okusun diye. "en" birakilirsa "Cay Bahcesi" Ingilizce seslendirilir.
+    <html lang="tr">
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
 
         {/*
-          Disable body scrolling on web. This makes ScrollView components work closer to how they do on native.
-          However, body scrolling is often nice to have for mobile web. If you want to enable it, remove this line.
+          Web'de body kaydirmasini kapatir; ScrollView native davranisina yaklasir.
         */}
         <ScrollViewStyleReset />
 
-        {/* Using raw CSS styles as an escape-hatch to ensure the background color never flickers in dark-mode. */}
+        {/* Ham CSS: koyu modda zemin renginin titremesini engellemek icin kacis kapisi. */}
         <style dangerouslySetInnerHTML={{ __html: responsiveBackground }} />
-        {/* Add any additional <head> elements that you want globally available on web... */}
       </head>
       <body>{children}</body>
     </html>
   );
 }
 
+// Renkler paletten geliyor. Sabit #fff/#000 kullanilsaydi ilk boyamada
+// beyaz/siyah bir kare gorunup ardindan tema rengine sicrardi.
 const responsiveBackground = `
 body {
-  background-color: #fff;
+  background-color: ${Palette.krem};
 }
 @media (prefers-color-scheme: dark) {
   body {
-    background-color: #000;
+    background-color: ${Palette.gece};
   }
 }`;

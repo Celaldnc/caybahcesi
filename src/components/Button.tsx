@@ -1,16 +1,23 @@
+import type { ReactElement } from 'react';
 import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useThemeColor } from '@/components/Themed';
-import { TOUCH } from '@/constants/config';
+import { OPACITY, RADIUS, SPACING, TOUCH, TYPO, WEIGHT } from '@/constants/config';
 
 export type ButtonVariant = 'primary' | 'secondary';
 
 export interface ButtonProps {
-  /** Butonun uzerindeki metin. Ayni zamanda varsayilan erisilebilirlik etiketi. */
+  /** Butonun uzerindeki metin. accessibilityLabel verilmezse erisilebilirlik adi da budur. */
   label: string;
   onPress: () => void;
   variant?: ButtonVariant;
   disabled?: boolean;
+  /**
+   * Ekran okuyucu adini metinden ayirmak icin. Ikon butonlarda gerekli olacak.
+   * WCAG 2.5.3 (Label in Name): verilecekse gorunen metni ICERMELI,
+   * yoksa Voice Control kullanicisi gordugu etiketi soyleyerek butonu tetikleyemez.
+   */
+  accessibilityLabel?: string;
   /** Ekran okuyucuya ek baglam (orn. "Seviye 3'u baslatir"). */
   accessibilityHint?: string;
   /** Testlerde bulunabilirlik icin. */
@@ -23,10 +30,11 @@ export function Button({
   onPress,
   variant = 'primary',
   disabled = false,
+  accessibilityLabel,
   accessibilityHint,
   testID,
   style,
-}: ButtonProps) {
+}: ButtonProps): ReactElement {
   const tint = useThemeColor({}, 'tint');
   const surface = useThemeColor({}, 'surface');
   const text = useThemeColor({}, 'text');
@@ -40,9 +48,8 @@ export function Button({
       testID={testID}
       onPress={onPress}
       disabled={disabled}
-      // Erisilebilirlik: rol + durum, ekran okuyucunun butonu dogru anons etmesi icin.
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled }}
       style={({ pressed }) => [
@@ -51,7 +58,10 @@ export function Button({
         isPrimary ? null : [styles.outlined, { borderColor: tint }],
         pressed ? styles.pressed : null,
         disabled ? styles.disabled : null,
+        // Cagiran tarafin style'i BURADA, dokunma hedefi degismezlerinden ONCE.
+        // Sona konsaydi `style={{ minHeight: 32 }}` 48pt garantisini sessizce bozardi.
         style,
+        styles.touchTarget,
       ]}
     >
       <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
@@ -61,26 +71,28 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    // TOUCH.MIN_TARGET: iOS HIG 44pt / Material 48dp -> 48 ikisini de karsilar.
-    minHeight: TOUCH.MIN_TARGET,
-    minWidth: TOUCH.MIN_TARGET,
-    paddingHorizontal: 24,
-    borderRadius: 14,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: RADIUS.button,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  /** Pazarlik edilemez: iOS HIG 44pt / Material 48dp -> 48 ikisini de karsilar. */
+  touchTarget: {
+    minHeight: TOUCH.MIN_TARGET,
+    minWidth: TOUCH.MIN_TARGET,
   },
   outlined: {
     borderWidth: 2,
   },
   pressed: {
-    opacity: 0.75,
+    opacity: OPACITY.pressed,
   },
   disabled: {
-    opacity: 0.4,
+    opacity: OPACITY.disabled,
   },
   label: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: TYPO.button,
+    fontWeight: WEIGHT.semibold,
   },
 });
 

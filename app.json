@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Cay Bahcesi Topla",
+    "name": "Çay Bahçesi Topla",
     "slug": "cay-bahcesi-topla",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -36,7 +36,14 @@
           "backgroundColor": "#FBF6EF"
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
       "expo-sqlite",
       "expo-asset"
     ],

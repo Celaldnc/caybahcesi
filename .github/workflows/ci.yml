@@ -2,8 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Her iki ad da listeli: depo su an "master" kullaniyor. Sadece "main"
+    # yazilsaydi varsayilan dala push'ta CI HIC calismazdi ve bu ancak ilk
+    # PR'da fark edilirdi -- merge sonrasi regresyonlar sessizce gecerdi.
+    branches: [main, master]
   pull_request:
+
+# En az yetki ilkesi. Belirtilmezse GITHUB_TOKEN depo/organizasyon
+# varsayilanini alir; eski depolarda bu read-write olabilir.
+permissions:
+  contents: read
 
 # Ayni dal icin yeni push gelirse eski kosuyu iptal et (CI dakikasi israf etme).
 concurrency:
@@ -64,4 +72,6 @@ jobs:
           cache: npm
       - run: npm ci
       # SDK/paket surum uyumsuzluklarini erken yakalar (app.json <-> package.json).
-      - run: npx expo-doctor
+      # devDependency olarak sabitlendi: "npx expo-doctor" her koşuda npm'den
+      # en son surumu cekerdi (tedarik zinciri riski + tekrarlanamaz kosu).
+      - run: npm run doctor

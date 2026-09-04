@@ -3,34 +3,36 @@
 Türk kültürü temalı casual **triple-match / sort** mobil oyunu.
 Çay bardağı, Türk kahvesi fincanı, nazar boncuğu, lokum, simit… 7 slot, 30 seviye, 30–90 saniyelik oturumlar.
 
-> **Durum:** Sprint 0 tamam (iskelet + araç zinciri). Sprint 1 (core oyun mantığı) sırada.
+> **Durum:** Sprint 0 tamam (iskelet + araç zinciri + kalite kapıları). Sprint 1 (core oyun mantığı) sırada.
 
 ---
 
 ## Teknoloji
 
-| Katman       | Seçim                                            | Sürüm           |
-| ------------ | ------------------------------------------------ | --------------- |
-| Framework    | Expo SDK                                         | 57.0.20         |
-| Runtime      | React Native / React                             | 0.86.3 / 19.2.3 |
-| Dil          | TypeScript (strict + `noUncheckedIndexedAccess`) | 6.0.3           |
-| Routing      | Expo Router                                      | 57.0.19         |
-| Animasyon    | Reanimated (+ react-native-worklets)             | 4.5.1 / 0.10.1  |
-| Gesture      | react-native-gesture-handler                     | 3.2.1           |
-| State        | Zustand                                          | 5.x             |
-| Depolama     | `expo-sqlite/kv-store`                           | 57.0.2          |
-| Ses / Haptik | expo-audio / expo-haptics                        | 57.x            |
-| Test         | Jest + @testing-library/react-native             | 29.7 / 14.0.1   |
+| Katman        | Seçim                                            | Kurulu sürüm    |
+| ------------- | ------------------------------------------------ | --------------- |
+| Framework     | Expo SDK                                         | 57.0.20         |
+| Runtime       | React Native / React                             | 0.86.3 / 19.2.3 |
+| Dil           | TypeScript (strict + `noUncheckedIndexedAccess`) | 6.0.3           |
+| Routing       | Expo Router                                      | 57.0.19         |
+| Animasyon     | Reanimated + react-native-worklets               | 4.5.1 / 0.10.1  |
+| Gesture       | react-native-gesture-handler                     | 2.32.0          |
+| State         | Zustand                                          | 5.0.15          |
+| Depolama      | `expo-sqlite/kv-store`                           | 57.0.2          |
+| Ses / Haptik  | expo-audio / expo-haptics                        | 57.0.4 / 57.0.2 |
+| Test          | Jest + @testing-library/react-native             | 29.7.0 / 14.0.1 |
+| Lint / Format | ESLint + Prettier                                | 9.39.5 / 3.9.6  |
 
 ### Spec'ten sapmalar ve gerekçeleri
 
-| Spec'te                        | Uygulanan                  | Neden                                                                                                                                                                                                                                                                                           |
-| ------------------------------ | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Expo SDK 54+                   | **SDK 57**                 | Eylül 2026'nın güncel sürümü.                                                                                                                                                                                                                                                                   |
-| Reanimated v3                  | **v4.5.1**                 | SDK 57 ile gelen sürüm. New Architecture zorunlu; babel plugin `react-native-worklets/plugin`'e taşındı.                                                                                                                                                                                        |
-| `expo-av` veya `expo-audio`    | **expo-audio**             | `expo-av` SDK 55'te tamamen kaldırıldı.                                                                                                                                                                                                                                                         |
-| `react-native-mmkv`            | **`expo-sqlite/kv-store`** | MMKV v4 NitroModules'a geçti → `react-native-nitro-modules` + **zorunlu dev build**, Expo Go çalışmıyor. `kv-store` da senkron (`getItemSync`) ve Expo Go'da çalışıyor. High-score/level için performans farkı ölçülemez. Depolama `StoragePort` arayüzü arkasında; adapter değişimi ~20 satır. |
-| `@testing-library/jest-native` | **kurulmadı**              | Deprecated; matcher'lar RNTL 12.4+ ile ana pakete taşındı.                                                                                                                                                                                                                                      |
+| Spec'te                        | Uygulanan                  | Neden                                                                                                                                                                                                                     |
+| ------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Expo SDK 54+                   | **SDK 57**                 | Eylül 2026'nın güncel sürümü.                                                                                                                                                                                             |
+| Reanimated v3                  | **v4.5.1**                 | SDK 57 ile gelen sürüm. New Architecture zorunlu; babel plugin `react-native-worklets/plugin`'e taşındı ve `babel-preset-expo` tarafından otomatik ekleniyor.                                                             |
+| Gesture Handler v3             | **v2.32.0**                | npm'de `latest` 3.2.1, ama `npx expo install` SDK 57 ile uyumlu olanı seçiyor. Uyumlu sürüm kazanır.                                                                                                                      |
+| `expo-av` veya `expo-audio`    | **expo-audio**             | `expo-av` SDK 55'te tamamen kaldırıldı.                                                                                                                                                                                   |
+| `react-native-mmkv`            | **`expo-sqlite/kv-store`** | MMKV v4 NitroModules'a geçti → `react-native-nitro-modules` + **zorunlu dev build**, Expo Go çalışmıyor. `kv-store` da senkron (`getItemSync`) ve Expo Go'da çalışıyor. High-score/level için performans farkı ölçülemez. |
+| `@testing-library/jest-native` | **kurulmadı**              | Deprecated; matcher'lar RNTL 12.4+ ile ana pakete taşındı.                                                                                                                                                                |
 
 ---
 
@@ -41,7 +43,7 @@ npm ci
 npm start          # QR kodu Expo Go ile okut
 ```
 
-Web önizleme (hızlı göz kontrolü için): `npm run web`
+Web önizleme (hızlı göz kontrolü, birincil hedef değil): `npm run web`
 
 ## Komutlar
 
@@ -64,18 +66,22 @@ Web önizleme (hızlı göz kontrolü için): `npm run web`
 ```
 src/
 ├── app/                  # Expo Router ekranları (dosya-tabanlı yönlendirme)
-│   ├── _layout.tsx       # Kök: GestureHandlerRootView + tema
+│   ├── _layout.tsx       # Kök: GestureHandlerRootView + tema + splash
+│   ├── +html.tsx         # Web statik render kabuğu
+│   ├── +not-found.tsx
 │   └── (tabs)/           # index (oyun) + settings
 ├── game/
-│   ├── core/             # ⚠ SAF TypeScript — RN/React/Expo import ETMEZ
+│   ├── core/             # ⚠ SAF TypeScript — platform API import ETMEZ
 │   │   └── rng.ts        # Tohumlu rastgelelik (Daily mod + test determinizmi)
 │   ├── engine/           # Reanimated/Gesture bileşenleri      (Sprint 2)
 │   ├── store/            # Zustand                              (Sprint 2)
 │   ├── audio/            # expo-audio sarmalayıcı               (Sprint 3)
 │   └── data/             # Tile tanımları, level configleri     (Sprint 1/3)
-├── components/           # Paylaşılan UI (Button, Themed…)
-├── hooks/
-└── constants/            # colors.ts (palet) + config.ts (tüm ayarlanabilir sayılar)
+├── components/           # Button, Screen, Themed, hook'lar
+├── hooks/                #                                      (Sprint 2)
+└── constants/
+    ├── colors.ts         # Palette (ham) + Colors (anlamsal token)
+    └── config.ts         # Oyun sabitleri + UI ölçekleri
 ```
 
 ### Neden `game/core` saf TypeScript?
@@ -86,16 +92,33 @@ Oyun kuralları (eşleşme, skor, seviye, üretici) hiçbir platform API'sine do
 - `%90` coverage eşiği gerçekçi hale gelir.
 - Kuralları oynamadan UI'ı baştan yazabilirsin.
 
-Bu kural **otomatik zorlanıyor**: [eslint.config.js](eslint.config.js) içindeki `no-restricted-imports`, `src/game/core/**` altında `react`, `react-native`, `expo*` import'unu hata sayar.
+Bu kural **iki ESLint kuralıyla birlikte** zorlanıyor ([eslint.config.js](eslint.config.js)):
+
+- `no-restricted-imports` → dış paketler (`react`, `react-native`, `expo*`, `zustand`)
+- `import/no-restricted-paths` → proje içi katmanlar. Bu kural **çözülmüş yola** bakar, dolayısıyla `@/game/store/x` ve `../../store/x` aynı şekilde yakalanır.
+
+Ayrıca core'da `require()` yasak (`no-restricted-imports` yalnızca ESM `import`'a bakar) ve kural `.tsx` dosyalarını da kapsar.
+
+### Renk sistemi
+
+İki katman: `Palette` (ham marka renkleri) → `Colors` (anlamsal token'lar). Bileşenler **her zaman** `Colors[tema].token` kullanır.
+
+Kontrast oranları WCAG 2.1 relative luminance formülüyle ölçüldü. Button primary etiket/zemin: **9.33:1 (light)** / **9.20:1 (dark)** — AAA. Sekme etiketi renkleri küçük metin eşiğini (4.5:1) karşılayacak şekilde seçildi: 5.06:1 / 5.26:1.
+
+> ⚠ **Sprint 1/2 uyarısı:** Palette'teki tile renkleri renk körlüğü altında ayırt edilemiyor (ör. `lokumPembe` ↔ `fistikYesil` protanopide 1.04:1). Tile'lar **yalnızca renkle** ayrılamaz — her tile'a ayırt edici sembol/şekil zorunlu (WCAG 1.4.1).
 
 ### Coverage eşikleri
 
 [jest.config.js](jest.config.js) iki ayrı eşik uygular:
 
-- `src/game/core/` → **%90** (oyun kuralları)
+- `src/game/core/**/*.ts` → **%90, dosya başına** (GLOB grubu)
 - global → **%70**
 
-> Jest, yola özel eşiği olan dosyaları global kovadan **çıkarır**. Yani "global %70", `core` hariç geri kalan koddur.
+> İki not: (1) Jest, yola özel eşiği olan dosyaları global kovadan **çıkarır** — "global %70" core hariç geri kalandır. (2) GLOB kullanılıyor, PATH değil; PATH olsaydı eşik _toplama_ uygulanır ve core büyüdükçe iyi test edilmiş dosyalar kötüleri maskelerdi.
+
+`src/constants/**` kapsam dışıdır: saf `as const` veri, herhangi bir test import ettiği anda %100 olur ve hiçbir mantık doğrulamadan yüzdeyi şişirir. İçeriğini [config.test.ts](src/constants/__tests__/config.test.ts) invariant sözleşmeleri korur.
+
+**Başka dışlama yoktur** — ekranlar dahil tüm `src/` ölçülüyor.
 
 ---
 
@@ -109,7 +132,7 @@ Bu kural **otomatik zorlanıyor**: [eslint.config.js](eslint.config.js) içindek
 
 ## Yol haritası
 
-- [x] **Sprint 0** — İskelet, TS strict, ESLint/Prettier, Jest, Husky, CI
+- [x] **Sprint 0** — İskelet, TS strict, ESLint/Prettier, Jest, Husky, CI, multi-agent kalite kapısı
 - [ ] **Sprint 1** — Core mantık (tiles, generator, matcher, level, score) TDD ile
 - [ ] **Sprint 2** — Render + gesture (SlotRow, TilePicker, animasyonlar)
 - [ ] **Sprint 3** — Kalıcılık, ses, 30 seviye, ayarlar

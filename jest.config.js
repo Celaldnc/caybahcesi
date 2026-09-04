@@ -1,44 +1,69 @@
+const ts = require('typescript');
+
+// -----------------------------------------------------------------------------
+// Alias'lar TEK KAYNAKTAN: tsconfig.json.
+//
+// Onceden `moduleNameMapper` elle kopyalanmisti. Alias'in uc tuketicisi var:
+// TypeScript (tsconfig'i okur), Metro (tsconfig'den otomatik turetir --
+// @expo/cli/.../createTypescriptResolver.js) ve Jest. Yalnizca Jest elle
+// kopyaydi, yani sessizce ayrisabilecek tek yer orasiydi.
+//
+// ts.readConfigFile JSONC yorumlarini da parse eder, bu yuzden tsconfig'deki
+// aciklama satirlari sorun cikarmaz.
+// -----------------------------------------------------------------------------
+const { config: tsconfig } = ts.readConfigFile(require.resolve('./tsconfig.json'), ts.sys.readFile);
+const tsPaths = tsconfig.compilerOptions?.paths ?? {};
+
+/** tsconfig `paths` -> Jest `moduleNameMapper`. */
+const moduleNameMapper = Object.fromEntries(
+  Object.entries(tsPaths).map(([alias, targets]) => [
+    `^${alias.replace('/*', '/(.*)')}$`,
+    `<rootDir>/${String(targets[0]).replace('./', '').replace('/*', '/$1')}`,
+  ]),
+);
+
+/** DoD esikleri. Tek yerde dursun ki dort metrikte tekrarlanmasin. */
+const CORE_MIN = 90;
+const GLOBAL_MIN = 70;
+const asThreshold = (pct) => ({
+  statements: pct,
+  branches: pct,
+  functions: pct,
+  lines: pct,
+});
+
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',
 
-  // tsconfig'deki "@/*" -> "./src/*" alias'inin Jest karsiligi.
-  // Ikisi senkron kalmali, yoksa test "Cannot find module '@/...'" der.
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-  },
+  moduleNameMapper,
 
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
 
-  testMatch: ['<rootDir>/src/**/__tests__/**/*.test.ts?(x)', '<rootDir>/src/**/*.test.ts?(x)'],
+  testMatch: ['<rootDir>/src/**/*.test.ts?(x)'],
 
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
     '!src/**/__tests__/**',
-    '!src/app/**', // expo-router ekranlari: e2e/manuel kapsamda
-    // .web.ts varyantlari yalnizca web bundle'inda yuklenir; jest-expo'nun
-    // native preset'i onlari hicbir zaman calistiramaz -> yapisal olarak %0.
-    // Web'i kapsama almak isterseniz jest-expo'nun cok-platformlu
-    // "projects" kurulumuna gecmek gerekir (Sprint 3 backlog).
-    '!src/**/*.web.{ts,tsx}',
+
+    // Saf veri dosyalari. Herhangi bir test onlari import ettigi anda %100
+    // olurlar ve hicbir mantik dogrulamadan global yuzdeyi sisirirler.
+    // Iceriklerini `constants/__tests__/config.test.ts` invariant testleri korur.
+    '!src/constants/**',
   ],
 
-  // DoD: core >= %90, genel >= %70.
-  // Jest glob-bazli esik destekler; boylece tek komutla iki kural birden zorlanir.
   coverageThreshold: {
-    global: {
-      statements: 70,
-      branches: 70,
-      functions: 70,
-      lines: 70,
-    },
-    './src/game/core/': {
-      statements: 90,
-      branches: 90,
-      functions: 90,
-      lines: 90,
-    },
+    global: asThreshold(GLOBAL_MIN),
+
+    // GLOB ('**/*.ts'), PATH ('./src/game/core/') DEGIL.
+    //
+    // Fark kritik: PATH grubu tum core dosyalarini TOPLAYIP esigi agregaya
+    // uygular. O zaman core buyudukce iyi test edilmis dosyalar kotu test
+    // edilmisleri maskeler -- 60 fonksiyonluk bir core'da 6 tamamen test
+    // edilmemis fonksiyon esigi gecebilir. GLOB grubu esigi DOSYA BASINA
+    // uygular; tek bir zayif dosya kapiyi kapatir.
+    './src/game/core/**/*.ts': asThreshold(CORE_MIN),
   },
 
   coverageReporters: ['text-summary', 'lcov', 'json-summary'],

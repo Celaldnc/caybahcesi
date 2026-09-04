@@ -1,51 +1,57 @@
+import type { ReactElement } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { Button } from '@/components/Button';
-import { Text, View } from '@/components/Themed';
-import { LEVEL, SLOTS } from '@/constants/config';
+import { Screen } from '@/components/Screen';
+import { Text } from '@/components/Themed';
+import { LEVEL, OPACITY, SLOTS, SPACING, TYPO, WEIGHT } from '@/constants/config';
 
 /**
  * Ana ekran -- Sprint 0 iskeleti.
- * Sprint 2'de burasi SlotRow + TilePicker'i barindiran gercek oyun ekranina donusecek.
+ * TODO(sprint-2): burasi SlotRow + TilePicker'i barindiran gercek oyun ekranina donusecek.
  */
-export default function HomeScreen() {
+export default function HomeScreen(): ReactElement {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Çay Bahçesi Topla</Text>
-      <Text style={styles.subtitle}>
+    <Screen>
+      {/* accessibilityRole="header": ekran okuyucuda basliktan basliga gezinme (rotor) icin. */}
+      <Text style={styles.title} accessibilityRole="header">
+        Çay Bahçesi Topla
+      </Text>
+      {/* Ekran okuyucular "·" karakterini tutarsiz okur; acik etiket veriyoruz. */}
+      <Text
+        style={styles.subtitle}
+        accessibilityLabel={`${SLOTS.INITIAL} slot, ${LEVEL.TOTAL} seviye`}
+      >
         {SLOTS.INITIAL} slot · {LEVEL.TOTAL} seviye
       </Text>
 
-      <View style={styles.actions}>
-        <Button
-          label="Oyna"
-          accessibilityHint="Bulunduğun seviyeden oyunu başlatır"
-          onPress={() => {
-            // Sprint 2: router.push('/game/1')
-          }}
-        />
-      </View>
-    </View>
+      <Button
+        label="Oyna"
+        // Sprint 0'da oyun ekrani henuz yok. Butonu etkin birakip hicbir sey
+        // yapmamak, ekran okuyucu kullanicisina yerine getirilmeyen bir vaat verir.
+        disabled
+        accessibilityHint="Oyun ekranı Sprint 2’de açılacak"
+        onPress={() => {
+          // TODO(sprint-2): router.push('/game/1')
+        }}
+        style={styles.playButton}
+      />
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: 24,
-  },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
+    fontSize: TYPO.title,
+    fontWeight: WEIGHT.bold,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    opacity: 0.7,
+    fontSize: TYPO.body,
+    opacity: OPACITY.muted,
+    textAlign: 'center',
   },
-  actions: {
-    marginTop: 24,
+  playButton: {
+    marginTop: SPACING.xl,
   },
 });
