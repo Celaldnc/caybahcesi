@@ -113,6 +113,20 @@ Kontrast oranları WCAG 2.1 relative luminance formülüyle ölçüldü. Button 
 
 > ⚠ **Sprint 1/2 uyarısı:** Palette'teki tile renkleri renk körlüğü altında ayırt edilemiyor (ör. `lokumPembe` ↔ `fistikYesil` protanopide 1.04:1). Tile'lar **yalnızca renkle** ayrılamaz — her tile'a ayırt edici sembol/şekil zorunlu (WCAG 1.4.1).
 
+### Oyun modeli: ekleme (insertion)
+
+Oyuncu tile'ı boş bir slota koymaz — mevcut tile'ların **arasına ekler**, satır sağa kayar. Kapasite sabit (7→9), satır dolunca oyun biter.
+
+Bu, ölçüme dayalı bir karardı. İlk uygulama "sabit slot + her eşleşmeden sonra sola sıkıştırma" idi ve tahtayı bir **yığına** çeviriyordu: dolu bloğun sağındaki tek slot "komşusu olan" slot olduğu için düşünen oyuncu hamlelerinin %100'ünde oraya koyuyordu. Sonuç: **80.000 hamlede 0 zincir** — spec'in istediği combo mekaniği yapısal olarak imkânsızdı.
+
+|                   | Sabit slot | Ekleme                                    |
+| ----------------- | ---------- | ----------------------------------------- |
+| "Sona ekle" oranı | %100       | **%17.6**                                 |
+| Zincir mümkün mü  | Hayır      | Evet (`[A A B B A A]` + araya B → 2 adım) |
+| Konum seçimi      | Dekoratif  | Oyunun çekirdek becerisi                  |
+
+Zincir açgözlü oyunda nadirdir; grubu bilerek bölen oyuncunun ödülüdür — beceri tavanı.
+
 ### No-stuck-state garantisi
 
 Spec'in "tüh, mahsur kaldım durumu oluşturma" maddesi somut bir sözleşmeye çevrildi: boş slot sayısı `SAFETY_THRESHOLD`'a düştüğünde tray, ya üçlü tamamlayan ya da bitişik çift kuran bir tile **içermek zorunda**.

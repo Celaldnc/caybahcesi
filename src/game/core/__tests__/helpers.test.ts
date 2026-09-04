@@ -58,15 +58,16 @@ describe('thoughtfulPolicy', () => {
     ];
 
     const move = thoughtfulPolicy(board, tray, createRng(1));
-    expect(move).toEqual({ tileIndex: 1, slotIndex: 2 });
+    expect(move?.tileIndex).toBe(1);
+    expect([0, 1, 2]).toContain(move?.position);
   });
 
-  it('eslesme yoksa ayni tipin bitisigine koyar (cift kurar)', () => {
-    const board = row('.', '.', 'A', '.');
+  it('eslesme yoksa ayni tipin bitisigine ekler (cift kurar)', () => {
+    const board = row('B', 'A', '.', '.');
     const tray: Tile[] = [{ id: SHORT.A, key: 'a1' }];
 
     const move = thoughtfulPolicy(board, tray, createRng(1));
-    expect([1, 3]).toContain(move?.slotIndex);
+    expect(move?.position).toBe(1);
   });
 
   it('dolu tahtada null doner (oyun sonu)', () => {
@@ -84,7 +85,7 @@ describe('carelessPolicy', () => {
   it('gecerli bir hamle uretir', () => {
     const move = carelessPolicy(row('A', '.', '.'), [{ id: SHORT.B, key: 'b1' }], createRng(3));
     expect(move).not.toBeNull();
-    expect([1, 2]).toContain(move?.slotIndex);
+    expect([0, 1]).toContain(move?.position);
     expect(move?.tileIndex).toBe(0);
   });
 

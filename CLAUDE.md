@@ -71,7 +71,10 @@ function assertNonEmptyPool(p: readonly TileId[]): asserts p is NonEmptyPool { .
 
 - **Eşleşme oranı 1/3'e çivilidir.** Korunum: hamle başına 1 tile girer, eşleşme başına 3 çıkar. Slot sayısı, tip sayısı, `BOARD_BIAS`, ağırlıklar — hiçbiri bunu değiştiremez. Ölçüldü: 0.329 / 0.328 / 0.326.
 - **Zorluk eğrisi tek değişkenden gelir:** `puan/hamle = BASE_PER_MATCH × (1/3) + PERFECT_SORT_BONUS × temizleme_oranı`. Bonus 0 yapılırsa eğri tamamen kaybolur.
-- **`collapse()` satırı sola paketlediği için tahta bir YIĞINDIR.** Düşünen oyuncu hamlelerinin %100'ünde ilk boş slota koyuyor → eşleşme hep bloğun sonunda olur → **zincir (cascade) rasyonel oyunda imkânsız**. Sonucu: `COMBO_MAX`/`COMBO_STEP` ölü (80.000 hamlede 0 zincir), `EXTRA_TILE_BONUS` ölü ve ters teşvik (4+ eşleşmeyi sadece kötü oynayan yapıyor). Bu bir KURAL sorunu, ayar sorunu değil.
+- **Model: EKLEME (insertion), sabit slot değil.** Oyuncu tile'ı boş bir slota koymaz, mevcut tile'ların _arasına_ ekler; satır sağa kayar. Kapasite sabittir, satır dolunca oyun biter.
+  Neden değiştirildi (ölçümle): sabit-slot + collapse modelinde tahta bir **yığına** dönüşüyordu — dolu bloğun sağındaki tek slot "komşusu olan" slot olduğu için düşünen oyuncu hamlelerinin **%100'ünde** oraya koyuyordu; 80.000 hamlede **0 zincir** oluştu. Yani spec'in "Combo x3!" banner'ı imkânsızdı ve "istediğin yere koy" vaadi karşılıksızdı.
+  Ekleme modelinden sonra "sona ekle" oranı **%17.6**'ya düştü — konum seçimi gerçek bir karar.
+- **Zincir (cascade) mümkün ama nadir.** İki grubun arasına ekleyip onları birleştirmek gerekir: `[A A B B A A]` + araya B → BBB gider → AAAA gider (2 adım, 7 tile). Açgözlü oyun üçlüyü anında aldığı için aynı tipten iki grup nadiren birlikte bulunur — zincir, grubu bilerek **bölen** oyuncunun ödülü, yani beceri tavanı. `COMBO_MAX` bu yüzden yapısal sınıra (`floor(SLOTS.MAX / MATCH.LENGTH) = 3`) çekildi; 5 ulaşılamazdı.
 - **`SAFETY_THRESHOLD` tek taşıyıcı sabittir.** Kapatılırsa kusursuz oyuncu bile %100 kaybediyor.
 - Denge sabitleri tahminle değil **ölçümle** seçildi. Değiştirmeden önce simüle et: `src/game/core/__tests__/helpers/policies.ts` içindeki `playGame` + politikalar hazır.
 

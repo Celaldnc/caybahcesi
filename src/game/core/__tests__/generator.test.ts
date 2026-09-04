@@ -8,7 +8,7 @@ import {
   generateTray,
   refillTray,
 } from '../generator';
-import { countEmpty, createEmptyRow, placeTile, resolve } from '../matcher';
+import { countEmpty, createEmptyRow, insertTile, resolve } from '../matcher';
 import { createRng } from '../rng';
 import { createTile } from '../tiles';
 import type { Tile, TileId } from '../types';
@@ -23,18 +23,16 @@ describe('findRescuePlacements', () => {
     expect(findRescuePlacements(createEmptyRow(7), POOL)).toEqual([]);
   });
 
-  it('bitisik ciftin yanina konarak eslesme yaratan yerlestirmeyi bulur', () => {
-    // [A A . . .] -> indis 2'ye A koymak AAA yapar.
+  it('bitisik ciftin yanina eklenerek eslesme yaratan konumu bulur', () => {
+    // [A A . . .] -> 0, 1 veya 2. konuma A eklemek AAA yapar.
     const placements = findRescuePlacements(row('A', 'A', '.', '.', '.'), POOL);
-    expect(placements).toContainEqual({ tileId: SHORT.A, index: 2 });
+    expect(placements).toContainEqual({ tileId: SHORT.A, position: 0 });
+    expect(placements).toContainEqual({ tileId: SHORT.A, position: 2 });
   });
 
-  it('iki tile arasindaki bosluga konarak eslesme yaratani bulur', () => {
-    // [A . A .] -> indis 1'e A koymak AAA yapar.
-    expect(findRescuePlacements(row('A', '.', 'A', '.'), POOL)).toContainEqual({
-      tileId: SHORT.A,
-      index: 1,
-    });
+  it('araya baska tip girmisse eslesme onermez', () => {
+    // [A B A .] -> hicbir tek ekleme uclu yapamaz.
+    expect(findRescuePlacements(row('A', 'B', 'A', '.'), POOL)).toEqual([]);
   });
 
   it('havuzda olmayan tile ile kurtarma onermez', () => {
@@ -51,10 +49,12 @@ describe('findRescuePlacements', () => {
     expect(findRescuePlacements(row('A', 'A', 'B'), POOL)).toEqual([]);
   });
 
-  it('onerdigi her yerlestirme gercekten eslesme uretir', () => {
-    const testRow = row('A', 'A', '.', 'B', 'B', '.', 'C');
-    for (const { tileId, index } of findRescuePlacements(testRow, POOL)) {
-      const after = placeTile(testRow, index, createTile(tileId));
+  it('onerdigi her ekleme gercekten eslesme uretir', () => {
+    const testRow = row('A', 'A', 'B', 'B', 'C', '.', '.');
+    const placements = findRescuePlacements(testRow, POOL);
+    expect(placements.length).toBeGreaterThan(0);
+    for (const { tileId, position } of placements) {
+      const after = insertTile(testRow, position, createTile(tileId));
       expect(resolve(after).removedCount).toBeGreaterThan(0);
     }
   });

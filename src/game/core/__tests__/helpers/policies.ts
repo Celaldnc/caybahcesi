@@ -1,7 +1,7 @@
 import { SLOTS } from '@/constants/config';
 
 import { generateTray, refillTray } from '../../generator';
-import { createEmptyRow, emptyIndices, placeTile, resolve } from '../../matcher';
+import { createEmptyRow, insertPositions, insertTile, resolve, tilesOf } from '../../matcher';
 import { createRng, type Rng } from '../../rng';
 import { computeScore } from '../../score';
 import { pickTilePool } from '../../tiles';
@@ -17,7 +17,8 @@ import type { SlotRow, Tile, TileId } from '../../types';
 
 export interface Move {
   readonly tileIndex: number;
-  readonly slotIndex: number;
+  /** Ekleme konumu: 0..tileCount (dahil). */
+  readonly position: number;
 }
 
 export type Policy = (row: SlotRow, tray: readonly Tile[], rng: Rng) => Move | null;
@@ -28,25 +29,28 @@ function findMatchingMove(row: SlotRow, tray: readonly Tile[]): Move | null {
     // tileIndex < tray.length -> undefined imkansiz (bkz. CLAUDE.md konvansiyonu).
     const tile = tray[tileIndex]!;
 
-    for (const slotIndex of emptyIndices(row)) {
-      if (resolve(placeTile(row, slotIndex, tile)).removedCount > 0) {
-        return { tileIndex, slotIndex };
+    for (const position of insertPositions(row)) {
+      if (resolve(insertTile(row, position, tile)).removedCount > 0) {
+        return { tileIndex, position };
       }
     }
   }
   return null;
 }
 
-/** Ayni tipin bitisigine koyarak cift kuran ilk hamle. */
+/** Ayni tipin bitisigine ekleyerek cift kuran ilk hamle. */
 function findPairBuildingMove(row: SlotRow, tray: readonly Tile[]): Move | null {
+  // Dolu satirda hicbir ekleme mumkun degil.
+  if (insertPositions(row).length === 0) return null;
+
   for (let tileIndex = 0; tileIndex < tray.length; tileIndex++) {
     const tile = tray[tileIndex]!;
 
-    for (const slotIndex of emptyIndices(row)) {
-      const left = row[slotIndex - 1];
-      const right = row[slotIndex + 1];
-      if ((left != null && left.id === tile.id) || (right != null && right.id === tile.id)) {
-        return { tileIndex, slotIndex };
+    // Ekleme modelinde ayni tipin hemen yanina eklemek her zaman mumkun.
+    const tiles = tilesOf(row);
+    for (let i = 0; i < tiles.length; i++) {
+      if (tiles[i]!.id === tile.id) {
+        return { tileIndex, position: i };
       }
     }
   }
@@ -55,10 +59,10 @@ function findPairBuildingMove(row: SlotRow, tray: readonly Tile[]): Move | null 
 
 /** Herhangi bir gecerli hamle; hicbiri yoksa null (tahta dolu). */
 function findAnyMove(row: SlotRow, tray: readonly Tile[]): Move | null {
-  const slots = emptyIndices(row);
-  const slotIndex = slots[0];
-  if (slotIndex === undefined || tray.length === 0) return null;
-  return { tileIndex: 0, slotIndex };
+  const positions = insertPositions(row);
+  const position = positions[0];
+  if (position === undefined || tray.length === 0) return null;
+  return { tileIndex: 0, position };
 }
 
 /**
@@ -70,9 +74,9 @@ export const thoughtfulPolicy: Policy = (row, tray) =>
 
 /** Dikkatsiz oyuncu: tamamen rastgele gecerli hamle. Beceri tabani olcumu. */
 export const carelessPolicy: Policy = (row, tray, rng) => {
-  const slots = emptyIndices(row);
-  if (slots.length === 0 || tray.length === 0) return null;
-  return { tileIndex: rng.int(tray.length), slotIndex: rng.pick(slots) };
+  const positions = insertPositions(row);
+  if (positions.length === 0 || tray.length === 0) return null;
+  return { tileIndex: rng.int(tray.length), position: rng.pick(positions) };
 };
 
 export interface GameOptions {
@@ -116,7 +120,7 @@ export function playGame(options: GameOptions): GameResult {
     // helpers.test.ts'te dogrulaniyor.
     const tile = tray[move.tileIndex]!;
 
-    const result = resolve(placeTile(row, move.slotIndex, tile));
+    const result = resolve(insertTile(row, move.position, tile));
     score += computeScore(result).total;
     row = result.row;
     tray = refillTray(

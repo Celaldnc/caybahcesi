@@ -76,6 +76,25 @@ describe('config invariant sozlesmeleri', () => {
       expect(SCORE.COMBO_STEP).toBeGreaterThanOrEqual(1);
     });
 
+    /**
+     * Tavan ULASILABILIR olmali. Zincirin her adimi en az MATCH.LENGTH tile
+     * kaldirir ve kapasite SLOTS.MAX'tir, dolayisiyla en fazla
+     * floor(SLOTS.MAX / MATCH.LENGTH) adim mumkundur. Bunun ustundeki bir
+     * COMBO_MAX, oyuncunun asla goremeyecegi olu bir sabittir.
+     */
+    it('combo tavani yapisal olarak ulasilabilirdir', () => {
+      expect(SCORE.COMBO_MAX).toBeLessThanOrEqual(Math.floor(SLOTS.MAX / MATCH.LENGTH));
+    });
+
+    /**
+     * COMBO_STEP tam sayi olmali: runPoints kesirli carpani RangeError ile
+     * reddediyor, yani 0.5 gibi "makul" bir denge degeri oyunu CALISMA
+     * ZAMANINDA patlatirdi -- testte degil.
+     */
+    it('combo adimi tam sayidir (kesirli deger runPoints i patlatir)', () => {
+      expect(Number.isInteger(SCORE.COMBO_STEP)).toBe(true);
+    });
+
     it('perfect-sort bonusu tek bir eslesmeden daha degerlidir', () => {
       expect(SCORE.PERFECT_SORT_BONUS).toBeGreaterThan(SCORE.BASE_PER_MATCH);
     });

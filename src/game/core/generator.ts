@@ -1,6 +1,6 @@
 import { TRAY } from '@/constants/config';
 
-import { countEmpty, emptyIndices, findRuns, placeTile } from './matcher';
+import { countEmpty, findRuns, insertPositions, insertTile, tilesOf } from './matcher';
 import type { Rng } from './rng';
 import { createTile, getTileDefinition } from './tiles';
 import type { SlotRow, Tile, TileId, Tray } from './types';
@@ -18,23 +18,23 @@ import type { SlotRow, Tile, TileId, Tray } from './types';
  *  3. AGIRLIKLI RASTGELE: geri kalani tile tanimlarindaki `weight` ile secilir.
  */
 
-/** Bir tile'i belirli bir bos slota koymanin eslesme yaratip yaratmadigi. */
-function createsMatch(row: SlotRow, index: number, tileId: TileId): boolean {
-  const probe = placeTile(row, index, { id: tileId, key: 'probe' });
+/** Bir tile'i belirli bir konuma EKLEMENIN eslesme yaratip yaratmadigi. */
+function createsMatch(row: SlotRow, position: number, tileId: TileId): boolean {
+  const probe = insertTile(row, position, { id: tileId, key: 'probe' });
   return findRuns(probe).length > 0;
 }
 
-/** Tek hamlede eslesme yaratan (tile tipi, slot indisi) ciftleri. */
+/** Tek hamlede eslesme yaratan (tile tipi, ekleme konumu) ciftleri. */
 export function findRescuePlacements(
   row: SlotRow,
   pool: readonly TileId[],
-): readonly { readonly tileId: TileId; readonly index: number }[] {
-  const placements: { tileId: TileId; index: number }[] = [];
+): readonly { readonly tileId: TileId; readonly position: number }[] {
+  const placements: { tileId: TileId; position: number }[] = [];
 
-  for (const index of emptyIndices(row)) {
+  for (const position of insertPositions(row)) {
     for (const tileId of pool) {
-      if (createsMatch(row, index, tileId)) {
-        placements.push({ tileId, index });
+      if (createsMatch(row, position, tileId)) {
+        placements.push({ tileId, position });
       }
     }
   }
@@ -52,24 +52,23 @@ export function findRescueTileIds(row: SlotRow, pool: readonly TileId[]): readon
 }
 
 /**
- * Tahtadaki bir tile'in yanina konup BITISIK CIFT olusturabilecek tipler.
+ * Tahtadaki bir tile'in yanina EKLENIP bitisik cift olusturabilecek tipler.
  *
  * Neden ayri bir kavram: kurtarma (uclu tamamlama) ancak zaten bir cift ya da
  * X_X kalibi varsa mumkundur. Tahta tamamen farkli tiplerden olusuyorsa
  * kurtarma esigine gelindiginde yapacak bir sey kalmaz. Cift kurma, oyuncunun
  * bir sonraki hamlede kurtarilabilir bir tahtaya sahip olmasini saglar.
+ *
+ * Ekleme modelinde bu basittir: satirda yer varsa, tahtadaki HER tipin
+ * yanina ayni tipten bir tile eklenebilir.
  */
 export function findPairBuildingTileIds(row: SlotRow, pool: readonly TileId[]): readonly TileId[] {
+  if (insertPositions(row).length === 0) return [];
+
   const ids = new Set<TileId>();
-
-  for (const index of emptyIndices(row)) {
-    for (const neighbour of [row[index - 1], row[index + 1]]) {
-      if (neighbour !== undefined && neighbour !== null && pool.includes(neighbour.id)) {
-        ids.add(neighbour.id);
-      }
-    }
+  for (const tile of tilesOf(row)) {
+    if (pool.includes(tile.id)) ids.add(tile.id);
   }
-
   return [...ids];
 }
 

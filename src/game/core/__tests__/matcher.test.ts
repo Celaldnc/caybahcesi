@@ -6,9 +6,12 @@ import {
   createEmptyRow,
   emptyIndices,
   findRuns,
+  insertPositions,
+  insertTile,
   isRowFull,
-  placeTile,
   resolve,
+  tileCount,
+  tilesOf,
 } from '../matcher';
 import { createTile } from '../tiles';
 import type { Tile } from '../types';
@@ -50,28 +53,72 @@ describe('countEmpty / emptyIndices / isRowFull', () => {
   });
 });
 
-describe('placeTile', () => {
-  it('bos slota tile yerlestirir', () => {
-    const result = placeTile(row('.', '.', '.'), 1, createTile('cay-ince-belli'));
-    expect(show(result)).toBe('.A.');
+describe('tileCount / tilesOf / insertPositions', () => {
+  it('dolu tile sayisini verir', () => {
+    expect(tileCount(row('A', 'B', '.', '.'))).toBe(2);
+    expect(tileCount(createEmptyRow(5))).toBe(0);
+  });
+
+  it('tile lari paketli sirayla dondurur', () => {
+    expect(tilesOf(row('A', 'B', '.', '.')).map((t) => t.id)).toEqual([SHORT.A, SHORT.B]);
+  });
+
+  /** n tile -> n+1 konum: her tile'in soluna ve en saga. */
+  it('n tile icin n+1 ekleme konumu vardir', () => {
+    expect(insertPositions(createEmptyRow(4))).toEqual([0]);
+    expect(insertPositions(row('A', '.', '.', '.'))).toEqual([0, 1]);
+    expect(insertPositions(row('A', 'B', '.', '.'))).toEqual([0, 1, 2]);
+  });
+
+  it('dolu satirda ekleme konumu yoktur (oyun sonu)', () => {
+    expect(insertPositions(row('A', 'B', 'C'))).toEqual([]);
+  });
+});
+
+describe('insertTile', () => {
+  it('basa ekler ve sagdakileri kaydirir', () => {
+    expect(show(insertTile(row('A', 'B', '.', '.'), 0, createTile(SHORT.C)))).toBe('CAB.');
+  });
+
+  it('araya ekler ve sagdakileri kaydirir', () => {
+    expect(show(insertTile(row('A', 'B', '.', '.'), 1, createTile(SHORT.C)))).toBe('ACB.');
+  });
+
+  it('sona ekler', () => {
+    expect(show(insertTile(row('A', 'B', '.', '.'), 2, createTile(SHORT.C)))).toBe('ABC.');
+  });
+
+  it('bos satira ekler', () => {
+    expect(show(insertTile(createEmptyRow(3), 0, createTile(SHORT.A)))).toBe('A..');
+  });
+
+  it('kapasiteyi korur', () => {
+    expect(insertTile(row('A', '.', '.', '.'), 0, createTile(SHORT.B))).toHaveLength(4);
+  });
+
+  it('sonuc her zaman sola paketlidir', () => {
+    const result = insertTile(row('A', 'B', '.', '.'), 1, createTile(SHORT.C));
+    expect(show(result)).toBe('ACB.');
+    expect(emptyIndices(result)).toEqual([3]);
   });
 
   it('kaynak satiri degistirmez (saf fonksiyon)', () => {
-    const original = row('.', '.', '.');
-    placeTile(original, 0, createTile('cay-ince-belli'));
-    expect(show(original)).toBe('...');
+    const original = row('A', '.', '.');
+    insertTile(original, 0, createTile(SHORT.B));
+    expect(show(original)).toBe('A..');
   });
 
-  it('dolu slota yerlestirmeyi reddeder', () => {
-    expect(() => placeTile(row('A', '.', '.'), 0, createTile('kahve-fincan'))).toThrow(Error);
+  it('dolu satira eklemeyi reddeder', () => {
+    expect(() => insertTile(row('A', 'B', 'C'), 1, createTile(SHORT.A))).toThrow(Error);
   });
 
-  it('satir disi indisi reddeder', () => {
-    const r = row('.', '.', '.');
-    const tile = createTile('kahve-fincan');
-    expect(() => placeTile(r, -1, tile)).toThrow(RangeError);
-    expect(() => placeTile(r, 3, tile)).toThrow(RangeError);
-    expect(() => placeTile(r, 1.5, tile)).toThrow(RangeError);
+  it('gecersiz konumu reddeder', () => {
+    const r = row('A', 'B', '.', '.');
+    const tile = createTile(SHORT.C);
+    expect(() => insertTile(r, -1, tile)).toThrow(RangeError);
+    // tileCount = 2 oldugu icin gecerli en buyuk konum 2'dir.
+    expect(() => insertTile(r, 3, tile)).toThrow(RangeError);
+    expect(() => insertTile(r, 1.5, tile)).toThrow(RangeError);
   });
 });
 
@@ -91,9 +138,12 @@ describe('findRuns', () => {
   });
 
   /**
-   * Bosluk komsulugu KIRAR. Bu, "sabit slotlar + delik" modelinin
-   * tanimlayici kurali; testle sabitlenmezse ilerideki bir refactor
-   * sessizce oyun kurallarini degistirebilir.
+   * Bosluk komsulugu KIRAR.
+   *
+   * Ekleme modelinde satir her zaman paketli oldugu icin oyuncu bu durumu
+   * goremez; bosluk yalnizca `resolve` icinde, kaldirma ile sikistirma
+   * ARASINDA gecici olarak olusur. Kural yine de sabitlenmeli, `resolve`'un
+   * dogrulugu buna dayaniyor.
    */
   it('arada bosluk varsa eslesme saymaz', () => {
     expect(findRuns(row('A', '.', 'A', 'A'))).toEqual([]);
@@ -185,6 +235,28 @@ describe('resolve', () => {
     const result = resolve(row('B', 'A', 'A', 'A', 'B', 'B', '.'));
     expect(result.steps).toHaveLength(2);
     expect(result.removedCount).toBe(6);
+    expect(show(result.row)).toBe('.......');
+  });
+
+  /**
+   * EKLEME MODELININ VAROLUS GEREKCESI.
+   *
+   * Iki A-cifti arasindaki B-ciftini tamamlamak, B'leri kaldirinca A'lari
+   * birlestirir. Sabit-slot modelinde bu IMKANSIZDI (satir bir yigina
+   * donusuyordu, oyuncu hep sona ekliyordu, 80.000 hamlede 0 zincir).
+   *
+   * Zincir acgozlu oyunda nadirdir -- oyuncu ucluyu aninda aldigi icin
+   * ayni tipten iki grup nadiren birlikte bulunur. Grubu bilerek BOLEN
+   * oyuncunun odulu: beceri tavani.
+   */
+  it('iki grubun arasina eklemek zincir yaratir (ekleme modeli)', () => {
+    const board = row('A', 'A', 'B', 'B', 'A', 'A', '.');
+    const result = resolve(insertTile(board, 2, createTile(SHORT.B)));
+
+    expect(result.steps).toHaveLength(2);
+    expect(result.steps[0]?.runs[0]).toMatchObject({ tileId: SHORT.B, length: 3 });
+    expect(result.steps[1]?.runs[0]).toMatchObject({ tileId: SHORT.A, length: 4 });
+    expect(result.removedCount).toBe(7);
     expect(show(result.row)).toBe('.......');
   });
 

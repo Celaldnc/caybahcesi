@@ -64,12 +64,30 @@ export const SCORE = {
    * 3'un uzerindeki her ekstra tile'in getirdigi puan.
    * Ayri bir sabit: "4'lu eslesme 3'luden daha degerli olmali" kurali
    * kesirli aritmetige (10 * 4/3 = 13.33) kacmadan ifade edilsin diye.
+   *
+   * COMBO ile ayni kaderi paylasir: 4+ uzunlukta eslesme yalnizca zincirle
+   * (iki grup birlesince) olusur, acgozlu oyunda gorulmez. Ikisi de beceri
+   * tavani odulu; sifir olmadiklari surece "olu" degil, "nadir"dirler.
    */
   EXTRA_TILE_BONUS: 5,
   /** Zincirleme eslesmede her adimda carpanin artisi. */
   COMBO_STEP: 1,
-  /** Combo carpaninin ust siniri (sonsuz buyumeyi engeller). */
-  COMBO_MAX: 5,
+  /**
+   * Combo carpaninin ust siniri.
+   *
+   * 5 -> 3: 5 ULASILAMAZ bir degerdi. Zincirin her adimi en az MATCH.LENGTH
+   * tile kaldirir ve satir kapasitesi en fazla SLOTS.MAX'tir, dolayisiyla
+   * yapisal ust sinir floor(SLOTS.MAX / MATCH.LENGTH) = 3 adimdir.
+   * config.test.ts bu sinirI artik zorluyor -- "hedefi olmayan tavan"
+   * birakmiyoruz.
+   *
+   * Not: zincir EKLEME modelinde mumkun ama nadir. Acgozlu oyun ucluyu
+   * aninda aldigi icin ayni tipten iki grup nadiren ayni anda tahtada
+   * bulunur; zincir, grubu bilerek BOLEN bir oyuncunun odulu -- yani
+   * beceri tavani. Olculdu: elle kurulmus [A A B B A A] + araya B ->
+   * 2 adim, 7 tile, tahta temizlenir.
+   */
+  COMBO_MAX: 3,
   /**
    * Satiri TAMAMEN bosaltan her eslesme icin verilen bonus.
    *

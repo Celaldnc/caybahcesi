@@ -5,10 +5,27 @@ import type { CascadeStep, MatchRun, ResolveResult, Slot, SlotRow, Tile } from '
 /**
  * Eslesme motoru.
  *
- * Model: sabit slotlar + delik. Iki tile "yanyana" sayilmak icin ARDISIK
- * indislerde ve IKISI DE DOLU olmali. [A, null, A, A] eslesme DEGILDIR --
- * bosluk komsulugu kirar. Bu kural oyunun karakterini belirler ve
- * matcher.test.ts icinde acikca sabitlenmistir.
+ * MODEL: EKLEME (insertion). Satir her zaman SOLA PAKETLIDIR; oyuncu tile'i
+ * bos bir slota koymaz, mevcut tile'larin ARASINA ekler ve sagdaki her sey
+ * bir kayar. Kapasite sabittir (seviyeye gore 7-9); satir dolunca oyun biter.
+ *
+ * NEDEN sabit-slot degil de ekleme (olcume dayali karar):
+ * Sabit slot + her eslesmeden sonra sola sikistirma modelinde tahta bir
+ * YIGINA donusuyordu -- dolu blogun sagindaki tek slot "komsusu olan" slot
+ * oldugu icin dusunen oyuncu hamlelerinin %100'unde oraya koyuyordu.
+ * Eslesme hep blogun sonunda olusuyor, kaldirinca birlesecek bir sey
+ * kalmiyordu: 80.000 hamlede TEK BIR ZINCIR olusmadi. Yani combo mekanigi
+ * (spec'in "Combo x3!" banner'i) yapisal olarak imkansizdi ve "istedigin
+ * yere koy" vaadi karsiliksizdi.
+ *
+ * Ekleme modelinde iki grubun ARASINA girmek onlari birlestirebilir:
+ *   [A A B B A A] + araya B  ->  [A A B B B A A]
+ *   BBB gider -> sikis -> [A A A A] -> AAAA gider. Zincir x2.
+ *
+ * Iki tile "yanyana" sayilmak icin ardisik indislerde ve ikisi de dolu
+ * olmali. Satir paketli oldugu icin bu kural pratikte her zaman saglanir;
+ * bosluk yalnizca `resolve` icinde, kaldirma ile sikistirma ARASINDA
+ * gecici olarak olusur.
  *
  * Tum fonksiyonlar saf: girdi satirini asla degistirmez, yeni satir dondurur.
  */
@@ -44,20 +61,45 @@ export function isRowFull(row: SlotRow): boolean {
   return countEmpty(row) === 0;
 }
 
+/** Satirdaki dolu tile sayisi. */
+export function tileCount(row: SlotRow): number {
+  return row.length - countEmpty(row);
+}
+
+/** Satirdaki tile'lar, paketli sirayla. */
+export function tilesOf(row: SlotRow): readonly Tile[] {
+  return row.filter((slot): slot is Tile => slot !== null);
+}
+
 /**
- * Tile'i belirtilen bos slota koyar ve YENI satir dondurur.
- * Gecersiz indis veya dolu slot sessizce yutulmaz -- hata firlatir.
+ * Gecerli ekleme konumlari: 0..tileCount (dahil).
+ *
+ * n tile varsa n+1 konum vardir -- her tile'in soluna ve en saga. Bos
+ * satirda tek konum (0), dolu satirda hicbiri (oyun sonu).
  */
-export function placeTile(row: SlotRow, index: number, tile: Tile): SlotRow {
-  if (!Number.isInteger(index) || index < 0 || index >= row.length) {
-    throw new RangeError(`Slot indisi 0..${row.length - 1} araliginda olmali, alinan: ${index}`);
-  }
-  if (row[index] !== null) {
-    throw new Error(`Slot ${index} zaten dolu.`);
+export function insertPositions(row: SlotRow): readonly number[] {
+  if (isRowFull(row)) return [];
+  return Array.from({ length: tileCount(row) + 1 }, (_, i) => i);
+}
+
+/**
+ * Tile'i verilen konuma EKLER; sagdaki tile'lar bir kayar. Kapasite korunur.
+ *
+ * Gecersiz konum veya dolu satir sessizce yutulmaz -- hata firlatir.
+ */
+export function insertTile(row: SlotRow, position: number, tile: Tile): SlotRow {
+  if (isRowFull(row)) {
+    throw new Error('Satir dolu, tile eklenemez.');
   }
 
-  const next: Slot[] = [...row];
-  next[index] = tile;
+  const count = tileCount(row);
+  if (!Number.isInteger(position) || position < 0 || position > count) {
+    throw new RangeError(`Ekleme konumu 0..${count} araliginda olmali, alinan: ${position}`);
+  }
+
+  const tiles = tilesOf(row);
+  const next: Slot[] = [...tiles.slice(0, position), tile, ...tiles.slice(position)];
+  while (next.length < row.length) next.push(null);
   return next;
 }
 
