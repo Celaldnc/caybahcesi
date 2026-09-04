@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Ayni dal icin yeni push gelirse eski kosuyu iptal et (CI dakikasi israf etme).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint + Typecheck + Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # npm ci: package-lock.json'a birebir sadik, tekrarlanabilir kurulum.
+      # "npm install" kullanmiyoruz -- lock dosyasini sessizce degistirebilir.
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test (coverage esikleriyle)
+        run: npm run test:ci
+
+      - name: Coverage ozetini is akisina yaz
+        if: always()
+        run: |
+          test -f coverage/coverage-summary.json || exit 0
+          node scripts/coverage-summary.js >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Coverage raporunu sakla
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  expo-doctor:
+    name: Expo Doctor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # SDK/paket surum uyumsuzluklarini erken yakalar (app.json <-> package.json).
+      - run: npx expo-doctor

@@ -2,16 +2,30 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+
+    // --- Spec ustu ek katilik (junior guvenlik agi) ---
+    // Bu oyun dizi-indeksi agirlikli (slots[i], tray[i]). noUncheckedIndexedAccess
+    // olmadan TS "slots[7]" icin Tile doner ve undefined'i kacirir -> runtime crash.
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Global test tipleri (describe/it/expect). Acikca belirtilmezse
+    // expo/tsconfig.base ile otomatik yukleme guvenilir calismiyor.
+    "types": ["jest", "node"],
+
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "*.ts",
+    "*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-  ]
+  ],
+  "exclude": ["node_modules", "dist", ".expo"]
 }

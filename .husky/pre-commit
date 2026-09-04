@@ -1,0 +1,4 @@
+# Hizli kapi: sadece staged dosyalara lint+format, sonra tip kontrolu.
+# Tam test paketi pre-push'ta calisir; commit akisini yavaslatmiyoruz.
+npx lint-staged
+npm run typecheck
