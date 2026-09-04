@@ -54,6 +54,16 @@ describe('config invariant sozlesmeleri', () => {
     it('eslesme uzunlugu triple-match turune uygundur', () => {
       expect(MATCH.LENGTH).toBe(3);
     });
+
+    it('guvenlik esigi anlamli bir aralikta (0 = kapali, slot sayisi = her zaman acik)', () => {
+      expect(TRAY.SAFETY_THRESHOLD).toBeGreaterThan(0);
+      expect(TRAY.SAFETY_THRESHOLD).toBeLessThan(SLOTS.INITIAL);
+    });
+
+    it('tahta yanliligi gecerli bir olasiliktir', () => {
+      expect(TRAY.BOARD_BIAS).toBeGreaterThan(0);
+      expect(TRAY.BOARD_BIAS).toBeLessThanOrEqual(1);
+    });
   });
 
   describe('SCORE', () => {
@@ -66,8 +76,33 @@ describe('config invariant sozlesmeleri', () => {
       expect(SCORE.COMBO_STEP).toBeGreaterThanOrEqual(1);
     });
 
+    /**
+     * Tavan ULASILABILIR olmali. Zincirin her adimi en az MATCH.LENGTH tile
+     * kaldirir ve kapasite SLOTS.MAX'tir, dolayisiyla en fazla
+     * floor(SLOTS.MAX / MATCH.LENGTH) adim mumkundur. Bunun ustundeki bir
+     * COMBO_MAX, oyuncunun asla goremeyecegi olu bir sabittir.
+     */
+    it('combo tavani yapisal olarak ulasilabilirdir', () => {
+      expect(SCORE.COMBO_MAX).toBeLessThanOrEqual(Math.floor(SLOTS.MAX / MATCH.LENGTH));
+    });
+
+    /**
+     * COMBO_STEP tam sayi olmali: runPoints kesirli carpani RangeError ile
+     * reddediyor, yani 0.5 gibi "makul" bir denge degeri oyunu CALISMA
+     * ZAMANINDA patlatirdi -- testte degil.
+     */
+    it('combo adimi tam sayidir (kesirli deger runPoints i patlatir)', () => {
+      expect(Number.isInteger(SCORE.COMBO_STEP)).toBe(true);
+    });
+
     it('perfect-sort bonusu tek bir eslesmeden daha degerlidir', () => {
       expect(SCORE.PERFECT_SORT_BONUS).toBeGreaterThan(SCORE.BASE_PER_MATCH);
+    });
+
+    it('ekstra tile bonusu pozitif ama taban puandan kucuktur', () => {
+      // 4'lu eslesme 3'luden degerli olmali, ama iki ayri 3'luden degil.
+      expect(SCORE.EXTRA_TILE_BONUS).toBeGreaterThan(0);
+      expect(SCORE.EXTRA_TILE_BONUS).toBeLessThan(SCORE.BASE_PER_MATCH);
     });
   });
 

@@ -11,6 +11,73 @@ Türk temalı triple-match mobil oyun. Expo SDK 57 + TypeScript strict + TDD.
 5. **Her feature'a en az 1 test.** `core/` **dosya başına** %90, global %70 — CI'da zorunlu.
 6. **Commit öncesi `npm run verify`.**
 
+## Test yazarken (Sprint 1'de pahalıya öğrenildi)
+
+### Sayaç sıfırdan başlayan test VAKUMDUR
+
+```ts
+let violations = 0;
+playGame({ onBeforeMove: (...) => { if (bad) violations++ } });
+expect(violations).toBe(0);   // ← callback hiç çalışmasa da GEÇER
+```
+
+Mutasyon testiyle yakalandı: `onBeforeMove` çağrısı tamamen silindiğinde projenin amiral gemisi "no-stuck-state garantisi" testi yine yeşil geçiyordu. **Kural:** bir şeyin _olmadığını_ iddia etmeden önce, denetimin _yapıldığını_ iddia et.
+
+```ts
+expect(audits).toBeGreaterThan(SEEDS * 10);
+expect(pressureSeen).toBeGreaterThan(0);
+expect(violations).toBe(0);
+```
+
+### %100 coverage ≈ %67 mutasyon skoru
+
+Sprint 1'de 48 mutant denendi, 16'sı hayatta kaldı. Coverage "çalıştırıldı" demek, "doğrulandı" demek değil. Yeni bir invaryant yazarken sor: **bu kuralı tersine çevirsem hangi test kırılır?** Kırılan yoksa test değil, dekorasyon.
+
+### İnvaryantı DOĞRU eksende yaz
+
+"Aynı ailedeki tile'lar farklı forma sahiptir" testi oyunda **hiç gerçekleşmeyen** bir senaryoyu koruyordu (`pickTilePool` aynı aileden iki tile seçmiyor). Her zaman gerçekleşen senaryo korumasızdı: havuzların %99.83'ünde form çakışması vardı. **Testi kodun yapısına değil, oyunun gerçeğine göre yaz.**
+
+### Test yardımcıları da ölçülür
+
+`__tests__/helpers/**` bilerek `collectCoverageFrom` içinde. Property testlerinin tamamı `playGame`'e dayanıyor; ölçüm dışında kalırsa "garanti" iddiaları doğrulanmamış koda yaslanır.
+
+### Geçici ölçüm dosyaları: `zz-` öneki
+
+Keşif/tuning dosyalarını `src/**/__tests__/zz-*.test.ts` olarak adlandır — `jest.config.js` `testPathIgnorePatterns` onları DoD kapısından dışlar, `.gitignore` commit'lenmelerini engeller. (Yaşandı: geçici tarama dosyaları `npm run verify`'ı 137 lint hatasıyla düşürdü ve test süresini 6 sn → 96 sn çıkardı.)
+
+## Kod konvansiyonları
+
+### `noUncheckedIndexedAccess`: TEK konvansiyon
+
+İndis kanıtlanabilir şekilde sınır içindeyse **`!` + yerinde gerekçe** yaz. Ulaşılamaz `undefined` dalı **ekleme** — test edilemez ölü kod üretir ve branch coverage'ı yanıltır (Istanbul `||` için sadece operand değerlendirmesini sayar, o dalın erişilebilir olduğunu kanıtlamaz).
+
+```ts
+// index < row.length -> undefined imkansiz; yalnizca null anlamli.
+const slot = row[index]!;
+```
+
+Sınır _dışı_ erişim (`row[i - 1]`) gerçekten `undefined` dönebilir — orada kontrol meşrudur.
+
+### Boş-koleksiyon sorununu tipe taşı
+
+Çalışma zamanı guard'ı yerine tip kullan: ne ulaşılamaz `throw` ne sessiz bozulma kalır.
+
+```ts
+type NonEmptyPool = readonly [TileId, ...TileId[]];
+function assertNonEmptyPool(p: readonly TileId[]): asserts p is NonEmptyPool { ... }
+```
+
+## Oyun modeli — ölçülmüş gerçekler
+
+- **Eşleşme oranı 1/3'e çivilidir.** Korunum: hamle başına 1 tile girer, eşleşme başına 3 çıkar. Slot sayısı, tip sayısı, `BOARD_BIAS`, ağırlıklar — hiçbiri bunu değiştiremez. Ölçüldü: 0.329 / 0.328 / 0.326.
+- **Zorluk eğrisi tek değişkenden gelir:** `puan/hamle = BASE_PER_MATCH × (1/3) + PERFECT_SORT_BONUS × temizleme_oranı`. Bonus 0 yapılırsa eğri tamamen kaybolur.
+- **Model: EKLEME (insertion), sabit slot değil.** Oyuncu tile'ı boş bir slota koymaz, mevcut tile'ların _arasına_ ekler; satır sağa kayar. Kapasite sabittir, satır dolunca oyun biter.
+  Neden değiştirildi (ölçümle): sabit-slot + collapse modelinde tahta bir **yığına** dönüşüyordu — dolu bloğun sağındaki tek slot "komşusu olan" slot olduğu için düşünen oyuncu hamlelerinin **%100'ünde** oraya koyuyordu; 80.000 hamlede **0 zincir** oluştu. Yani spec'in "Combo x3!" banner'ı imkânsızdı ve "istediğin yere koy" vaadi karşılıksızdı.
+  Ekleme modelinden sonra "sona ekle" oranı **%17.6**'ya düştü — konum seçimi gerçek bir karar.
+- **Zincir (cascade) mümkün ama nadir.** İki grubun arasına ekleyip onları birleştirmek gerekir: `[A A B B A A]` + araya B → BBB gider → AAAA gider (2 adım, 7 tile). Açgözlü oyun üçlüyü anında aldığı için aynı tipten iki grup nadiren birlikte bulunur — zincir, grubu bilerek **bölen** oyuncunun ödülü, yani beceri tavanı. `COMBO_MAX` bu yüzden yapısal sınıra (`floor(SLOTS.MAX / MATCH.LENGTH) = 3`) çekildi; 5 ulaşılamazdı.
+- **`SAFETY_THRESHOLD` tek taşıyıcı sabittir.** Kapatılırsa kusursuz oyuncu bile %100 kaybediyor.
+- Denge sabitleri tahminle değil **ölçümle** seçildi. Değiştirmeden önce simüle et: `src/game/core/__tests__/helpers/policies.ts` içindeki `playGame` + politikalar hazır.
+
 ## Bu projede yanan tuzaklar (tekrar düşme)
 
 ### RNTL v14: `render` ve `fireEvent` **async**
@@ -52,6 +119,12 @@ Aynı sebeple hidrasyon yoktur: `useClientOnlyValue` gibi "sunucuda X, istemcide
 ### `expo prebuild` `package.json`'ı sessizce değiştirir
 
 `"android": "expo start --android"` → `expo run:android` yapar. `--no-install` bunu engellemez. CI'a prebuild eklersen working tree kirlenir. Çalıştırdıysan `git checkout -- package.json`.
+
+**Ek tuzak:** `.gitignore`'da `/android` var, yani prebuild'in ürettiği `android/` klasörü **silinmese bile `git status` temiz görünür**. Bu adımı `git status` ile doğrulamak sahte güven verir — `test -d android` ile bak.
+
+### CI hiç çalışmadı
+
+`git remote -v` boş. `.github/workflows/ci.yml` yerel olarak simüle edildi ama GitHub'da bir kez bile koşmadı; `actions/checkout@v7` vb. sürümleri API'den doğrulandı, pratikte değil. İlk push'ta doğrula.
 
 ### `jest.resetModules()` React kimliğini bozar
 

@@ -72,7 +72,13 @@ src/
 │   └── (tabs)/           # index (oyun) + settings
 ├── game/
 │   ├── core/             # ⚠ SAF TypeScript — platform API import ETMEZ
-│   │   └── rng.ts        # Tohumlu rastgelelik (Daily mod + test determinizmi)
+│   │   ├── types.ts      # Tile/Slot/SlotRow/LevelConfig veri modeli
+│   │   ├── rng.ts        # Tohumlu rastgelelik (Daily mod + test determinizmi)
+│   │   ├── tiles.ts      # 25 tile, 9 aile, aileye yayan havuz seçimi
+│   │   ├── matcher.ts    # 3-yanyana tespit, kaldırma, sıkıştırma, zincir
+│   │   ├── generator.ts  # Tray üretimi + no-stuck-state garantisi
+│   │   ├── score.ts      # Combo, uzun eşleşme bonusu, perfect-sort
+│   │   └── level.ts      # 30 seviyelik formül tabanlı zorluk eğrisi
 │   ├── engine/           # Reanimated/Gesture bileşenleri      (Sprint 2)
 │   ├── store/            # Zustand                              (Sprint 2)
 │   ├── audio/            # expo-audio sarmalayıcı               (Sprint 3)
@@ -107,6 +113,43 @@ Kontrast oranları WCAG 2.1 relative luminance formülüyle ölçüldü. Button 
 
 > ⚠ **Sprint 1/2 uyarısı:** Palette'teki tile renkleri renk körlüğü altında ayırt edilemiyor (ör. `lokumPembe` ↔ `fistikYesil` protanopide 1.04:1). Tile'lar **yalnızca renkle** ayrılamaz — her tile'a ayırt edici sembol/şekil zorunlu (WCAG 1.4.1).
 
+### Oyun modeli: ekleme (insertion)
+
+Oyuncu tile'ı boş bir slota koymaz — mevcut tile'ların **arasına ekler**, satır sağa kayar. Kapasite sabit (7→9), satır dolunca oyun biter.
+
+Bu, ölçüme dayalı bir karardı. İlk uygulama "sabit slot + her eşleşmeden sonra sola sıkıştırma" idi ve tahtayı bir **yığına** çeviriyordu: dolu bloğun sağındaki tek slot "komşusu olan" slot olduğu için düşünen oyuncu hamlelerinin %100'ünde oraya koyuyordu. Sonuç: **80.000 hamlede 0 zincir** — spec'in istediği combo mekaniği yapısal olarak imkânsızdı.
+
+|                   | Sabit slot | Ekleme                                    |
+| ----------------- | ---------- | ----------------------------------------- |
+| "Sona ekle" oranı | %100       | **%17.6**                                 |
+| Zincir mümkün mü  | Hayır      | Evet (`[A A B B A A]` + araya B → 2 adım) |
+| Konum seçimi      | Dekoratif  | Oyunun çekirdek becerisi                  |
+
+Zincir açgözlü oyunda nadirdir; grubu bilerek bölen oyuncunun ödülüdür — beceri tavanı.
+
+### No-stuck-state garantisi
+
+Spec'in "tüh, mahsur kaldım durumu oluşturma" maddesi somut bir sözleşmeye çevrildi: boş slot sayısı `SAFETY_THRESHOLD`'a düştüğünde tray, ya üçlü tamamlayan ya da bitişik çift kuran bir tile **içermek zorunda**.
+
+Bu garanti ölçümle doğrulanıyor, iddia edilmiyor:
+
+| Oyuncu                  | Kayıp oranı (lvl 1 / lvl 30) |
+| ----------------------- | ---------------------------- |
+| Yerleştirmesini düşünen | %0 / %0                      |
+| %10 hata payı olan      | %2 / %2                      |
+| %30 hata payı olan      | %25 / %47                    |
+| Tamamen rastgele        | %100 / %100                  |
+
+Yani **üretici adil, kayıp oyuncunun yerleştirme hatasından gelir.** Bir _sort_ oyununda yerleştirme zaten becerinin kendisidir.
+
+### Denge: tahminle değil ölçümle
+
+`src/constants/config.ts`'teki her denge sabiti simülasyonla seçildi. Ölçülen yapısal gerçekler:
+
+- **Eşleşme oranı korunum gereği 1/3'e çivili** — slot/tip sayısından bağımsız.
+- Dolayısıyla `puan/hamle = BASE_PER_MATCH × (1/3) + PERFECT_SORT_BONUS × temizleme_oranı`; zorluk eğrisinin tamamı temizleme oranından gelir.
+- Sonuç: 30 seviyenin **30'u da** p50 olarak 30-90 sn hedef bandında.
+
 ### Coverage eşikleri
 
 [jest.config.js](jest.config.js) iki ayrı eşik uygular:
@@ -133,7 +176,7 @@ Kontrast oranları WCAG 2.1 relative luminance formülüyle ölçüldü. Button 
 ## Yol haritası
 
 - [x] **Sprint 0** — İskelet, TS strict, ESLint/Prettier, Jest, Husky, CI, multi-agent kalite kapısı
-- [ ] **Sprint 1** — Core mantık (tiles, generator, matcher, level, score) TDD ile
+- [x] **Sprint 1** — Core mantık (tiles, generator, matcher, level, score) TDD ile
 - [ ] **Sprint 2** — Render + gesture (SlotRow, TilePicker, animasyonlar)
 - [ ] **Sprint 3** — Kalıcılık, ses, 30 seviye, ayarlar
 - [ ] **Sprint 4** — EAS build, mağaza yayını

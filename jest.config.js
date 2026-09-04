@@ -42,10 +42,20 @@ module.exports = {
 
   testMatch: ['<rootDir>/src/**/*.test.ts?(x)'],
 
+  // Kesif/olcum dosyalari (zz-*) DoD kapisina girmez.
+  // Yasandi: denge taramasi icin yazilan gecici dosyalar testMatch'e uydu ve
+  // `npm run verify` lint'te 137 hatayla dustu, test suresi 6 sn -> 96 sn cikti.
+  // Isim onekiyle ayirmak, kesif yapmayi ucuz ve kapiyi temiz tutuyor.
+  testPathIgnorePatterns: ['/node_modules/', '/__tests__/zz-'],
+
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
     '!src/**/__tests__/**',
+    // ...ama test YARDIMCILARI olculur. Property testlerinin tamami bunlara
+    // dayaniyor; olcum disinda kalirlarsa "garanti" iddialari dogrulanmamis
+    // koda yaslanir. Mutasyon denetimi bu bosluktan gecen hatalar buldu.
+    'src/**/__tests__/helpers/**/*.ts',
 
     // Saf veri dosyalari. Herhangi bir test onlari import ettigi anda %100
     // olurlar ve hicbir mantik dogrulamadan global yuzdeyi sisirirler.

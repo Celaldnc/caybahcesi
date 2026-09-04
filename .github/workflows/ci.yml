@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    # Her iki ad da listeli: depo su an "master" kullaniyor. Sadece "main"
-    # yazilsaydi varsayilan dala push'ta CI HIC calismazdi ve bu ancak ilk
-    # PR'da fark edilirdi -- merge sonrasi regresyonlar sessizce gecerdi.
+    # Deponun gercek varsayilan dali "master". "main" de listede tutuluyor
+    # cunku git config init.defaultBranch = main; depo ileride yeniden
+    # adlandirilirsa CI sessizce susmasin.
     branches: [main, master]
   pull_request:
 
