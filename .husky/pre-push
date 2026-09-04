@@ -1,0 +1,2 @@
+# Push'tan once tam DoD kapisi: lint + typecheck + coverage esikli testler.
+npm run verify

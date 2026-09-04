@@ -1,0 +1,9 @@
+# Windows'ta calisip Linux CI'da test eden bir ekip icin tek dogru:
+# depoda her zaman LF. Prettier "endOfLine: lf" ile ayni yonde calisir,
+# boylece "Delete CR" lint gurultusu bir daha cikmaz.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ttf binary
+*.otf binary
