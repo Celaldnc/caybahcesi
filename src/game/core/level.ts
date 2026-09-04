@@ -1,0 +1,95 @@
+import { LEVEL, SLOTS } from '@/constants/config';
+
+import type { LevelConfig } from './types';
+
+/**
+ * Seviye yapilandirmasi ve ilerleme kontrolu.
+ *
+ * Neden formul, elle yazilmis 30 kayit degil:
+ *  - Elle yazilan bir tablo sessizce tutarsizlasir (slot sayisi geriler,
+ *    hedef skor duser, tip sayisi slot sayisini asar). Formul + invariant
+ *    testleri bu sinifi tumden ortadan kaldirir.
+ *  - Denge ayari tek yerden yapilir: constants/config.ts.
+ *  - Elle ince ayar gerekirse `data/levels.ts` bu ciktiyi ezebilir (Sprint 3).
+ *
+ * Egrinin dayandigi OLCUM (yerlestirmesini dusunen politika, 80 tohum;
+ * uzun vadeli hiz -- acilis hamleleri puan getirmez):
+ *   7 slot / 5 tip -> ~11 puan/hamle
+ *   7 slot / 7 tip -> ~9
+ *   8 slot / 7 tip -> ~7
+ *   9 slot / 9 tip -> ~4
+ * Yani asil zorluk hedefin yukselmesinden degil, puan HIZININ dusmesinden
+ * geliyor; hedef skor bu yuzden yavas artar.
+ */
+
+/** Verilen level numarasinin gecerliligini dogrular. */
+function assertValidLevelNumber(levelNumber: number): void {
+  if (!Number.isInteger(levelNumber) || levelNumber < 1 || levelNumber > LEVEL.TOTAL) {
+    throw new RangeError(
+      `Level numarasi 1..${LEVEL.TOTAL} araliginda tam sayi olmali, alinan: ${levelNumber}`,
+    );
+  }
+}
+
+/** Level numarasindan slot sayisi: her LEVELS_PER_SLOT_INCREASE levelde bir artar. */
+function slotCountFor(levelNumber: number): number {
+  const increases = Math.floor((levelNumber - 1) / LEVEL.LEVELS_PER_SLOT_INCREASE);
+  return Math.min(SLOTS.INITIAL + increases, SLOTS.MAX);
+}
+
+/** Level numarasindan tile tipi sayisi: MIN'den MAX'a dogrusal artis. */
+function tileTypeCountFor(levelNumber: number): number {
+  const span = LEVEL.MAX_TILE_TYPES - LEVEL.MIN_TILE_TYPES;
+  const progress = (levelNumber - 1) / (LEVEL.TOTAL - 1);
+  const count = LEVEL.MIN_TILE_TYPES + Math.round(span * progress);
+
+  // Tip sayisi slot sayisini asamaz: asarsa tahtada hicbir tip iki kez
+  // bulunmayabilir ve uclu kurmak imkansizlasir.
+  return Math.min(count, slotCountFor(levelNumber));
+}
+
+/** Level numarasindan hedef skor. */
+function targetScoreFor(levelNumber: number): number {
+  return LEVEL.BASE_TARGET_SCORE + LEVEL.TARGET_SCORE_STEP * (levelNumber - 1);
+}
+
+/** Tek bir seviyenin yapilandirmasi. */
+export function getLevelConfig(levelNumber: number): LevelConfig {
+  assertValidLevelNumber(levelNumber);
+  return {
+    number: levelNumber,
+    slotCount: slotCountFor(levelNumber),
+    tileTypeCount: tileTypeCountFor(levelNumber),
+    targetScore: targetScoreFor(levelNumber),
+  };
+}
+
+/** Tum seviyeler, 1'den LEVEL.TOTAL'a. */
+export const ALL_LEVELS: readonly LevelConfig[] = Array.from({ length: LEVEL.TOTAL }, (_, index) =>
+  getLevelConfig(index + 1),
+);
+
+/** Skor hedefe ulasti mi? */
+export function isLevelComplete(score: number, config: LevelConfig): boolean {
+  if (!Number.isFinite(score) || score < 0) {
+    throw new RangeError(`Skor negatif olmayan bir sayi olmali, alinan: ${score}`);
+  }
+  return score >= config.targetScore;
+}
+
+/**
+ * Hedefe ilerleme orani, 0..1 arasi.
+ * Ilerleme cubugu tasmasin diye 1'de sinirlanir.
+ */
+export function progressRatio(score: number, config: LevelConfig): number {
+  if (!Number.isFinite(score) || score < 0) {
+    throw new RangeError(`Skor negatif olmayan bir sayi olmali, alinan: ${score}`);
+  }
+  return Math.min(score / config.targetScore, 1);
+}
+
+/** Sonraki level numarasi; son levelden sonra null (oyun tamamlandi). */
+export function nextLevelNumber(levelNumber: number): number | null {
+  assertValidLevelNumber(levelNumber);
+  return levelNumber === LEVEL.TOTAL ? null : levelNumber + 1;
+}

@@ -131,9 +131,13 @@ module.exports = [
             {
               target: './src/game/core',
               from: './src',
-              except: ['./game/core'],
+              // './constants' bilincli bir istisna: saf `as const` veri, hicbir
+              // platform bagimliligi yok ve oyun sabitleri (MATCH.LENGTH,
+              // SCORE.*) orada yasiyor. Yasaklarsak core kendi kopyasini
+              // tutmak zorunda kalir -- "ciplak sayi yok" DoD kurali colur.
+              except: ['./game/core', './constants'],
               message:
-                'game/core yalnizca kendi icinden import edebilir. UI/store/audio/ekran katmanlarina bagimlilik saf mantigi kirletir.',
+                'game/core yalnizca kendi icinden ve constants/ ten import edebilir. UI/store/audio/ekran katmanlarina bagimlilik saf mantigi kirletir.',
             },
           ],
         },

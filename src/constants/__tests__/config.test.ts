@@ -54,6 +54,21 @@ describe('config invariant sozlesmeleri', () => {
     it('eslesme uzunlugu triple-match turune uygundur', () => {
       expect(MATCH.LENGTH).toBe(3);
     });
+
+    it('kurtarma esigi slot sayisindan kucuktur (yoksa her zaman tetiklenir)', () => {
+      expect(TRAY.RESCUE_THRESHOLD).toBeGreaterThan(0);
+      expect(TRAY.RESCUE_THRESHOLD).toBeLessThan(SLOTS.INITIAL);
+    });
+
+    it('guvenlik esigi kurtarma esiginden genistir (once ilerleme, sonra kurtarma)', () => {
+      expect(TRAY.SAFETY_THRESHOLD).toBeGreaterThan(TRAY.RESCUE_THRESHOLD);
+      expect(TRAY.SAFETY_THRESHOLD).toBeLessThan(SLOTS.INITIAL);
+    });
+
+    it('tahta yanliligi gecerli bir olasiliktir', () => {
+      expect(TRAY.BOARD_BIAS).toBeGreaterThan(0);
+      expect(TRAY.BOARD_BIAS).toBeLessThanOrEqual(1);
+    });
   });
 
   describe('SCORE', () => {
@@ -68,6 +83,12 @@ describe('config invariant sozlesmeleri', () => {
 
     it('perfect-sort bonusu tek bir eslesmeden daha degerlidir', () => {
       expect(SCORE.PERFECT_SORT_BONUS).toBeGreaterThan(SCORE.BASE_PER_MATCH);
+    });
+
+    it('ekstra tile bonusu pozitif ama taban puandan kucuktur', () => {
+      // 4'lu eslesme 3'luden degerli olmali, ama iki ayri 3'luden degil.
+      expect(SCORE.EXTRA_TILE_BONUS).toBeGreaterThan(0);
+      expect(SCORE.EXTRA_TILE_BONUS).toBeLessThan(SCORE.BASE_PER_MATCH);
     });
   });
 
