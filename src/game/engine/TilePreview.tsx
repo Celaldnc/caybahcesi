@@ -29,6 +29,8 @@ export interface TilePreviewProps {
   size: number;
   selected?: boolean;
   onPress?: () => void;
+  /** Etkin degilse dokunma kapali ve ekran okuyucuya "devre disi" bildirilir. */
+  disabled?: boolean;
   /** Ekran okuyucuya ek baglam (orn. "3. sirada"). */
   accessibilityHint?: string;
   testID?: string;
@@ -39,6 +41,7 @@ export function TilePreview({
   size,
   selected = false,
   onPress,
+  disabled = false,
   accessibilityHint,
   testID,
 }: TilePreviewProps): ReactElement {
@@ -70,11 +73,22 @@ export function TilePreview({
         testID={testID === undefined ? undefined : `${testID}-shape`}
       />
       <Text
+        testID={testID === undefined ? undefined : `${testID}-glif`}
         style={[styles.glyph, { fontSize: size * TILE_UI.GLYPH_RATIO }]}
         // Glif dekoratif: anlam `accessibilityLabel`de zaten var, ekran
         // okuyucu emojiyi ikinci kez okumasin.
         accessibilityElementsHidden
         importantForAccessibility="no"
+        /*
+         * `allowFontScaling={false}` ERISILEBILIRLIK GEREGI, aksine degil.
+         * Varsayilan `true` ile iOS AX5 (~3x) olceginde 26pt tile'da 34pt
+         * glif olusuyor, `overflow: hidden` ile kirpiliyor ve ALTINDAKI
+         * ShapeMark'i tamamen kapatiyor. Yani yaziyi buyuten az goren
+         * kullanici, tam olarak dusuk gorus icin tasarlanan BIRINCIL form
+         * kanalini kaybediyordu. Glif dekoratif ve olculeri tile'a bagli;
+         * anlam tasiyan metin degil.
+         */
+        allowFontScaling={false}
       >
         {definition.glyph}
       </Text>
@@ -97,10 +111,14 @@ export function TilePreview({
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={definition.nameTr}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ selected }}
+      // Devre disi durumu ekran okuyucuya BILDIRILMELI. Sprint 0'da ana
+      // ekranda kurulan kural: "butonu etkin birakip hicbir sey yapmamak,
+      // ekran okuyucu kullanicisina yerine getirilmeyen bir vaat verir."
+      accessibilityState={{ selected, disabled }}
       // Tile gorsel olarak 44pt'den kucuk olabilir (9 slot dar ekrana
       // sigmali); dokunma alani hitSlop ile HIG/Material esigine tamamlanir.
       hitSlop={Math.max(0, (TOUCH.MIN_TARGET - size) / 2)}

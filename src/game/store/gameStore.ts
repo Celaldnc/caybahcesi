@@ -42,6 +42,16 @@ export interface GameState {
   lastResult: ResolveResult | null;
   /** Son hamlede ulasilan combo carpani (banner icin). 0 = eslesme yok. */
   lastCombo: number;
+  /**
+   * Son hamlenin kazandirdigi puan.
+   *
+   * Neden state'te: ekran "eslesme oldu mu" sorusunu daha once render
+   * closure'indaki `state.score` ile `getState().score`'u KARSILASTIRARAK
+   * cevapliyordu. Iki farkli okuma kaynagi, hizli cift dokunusta bayat
+   * deger -> hamle yapilmadigi halde "basari" haptigi. Turetmeyi store
+   * yapiyor; ekran yalnizca okuyor.
+   */
+  lastGain: number;
   /** Bu seviyede ulasilan en yuksek combo. */
   bestCombo: number;
   /** Yapilan hamle sayisi. */
@@ -59,6 +69,15 @@ export interface GameActions {
   insertAt: (position: number) => void;
   /** Seviye tamamlandiysa sonrakine gecer. */
   advanceLevel: () => void;
+  /**
+   * Combo banner'ini gizler.
+   *
+   * `ANIM.COMBO_BANNER_MS` "ekranda kalma suresi" diye belgelenmisti ama
+   * hicbir zamanlayici yoktu: banner bir sonraki hamleye kadar duruyordu --
+   * ustelik `pointerEvents` de olmadigi icin o hamlenin dokunusunu
+   * bloklayarak. Ekran bu eylemi sure sonunda cagirir.
+   */
+  clearCombo: () => void;
   /** Mevcut seviyeyi bastan baslatir. */
   retry: () => void;
 }
@@ -86,6 +105,7 @@ function emptyState(level: number): GameState {
     selectedTrayIndex: null,
     lastResult: null,
     lastCombo: 0,
+    lastGain: 0,
     bestCombo: 0,
     moves: 0,
   };
@@ -175,6 +195,7 @@ export function createGameStore() {
         selectedTrayIndex: null,
         lastResult: result,
         lastCombo: breakdown.maxCombo,
+        lastGain: breakdown.total,
         bestCombo: Math.max(state.bestCombo, breakdown.maxCombo),
         moves: state.moves + 1,
       });
@@ -188,6 +209,11 @@ export function createGameStore() {
       if (next === null) return; // son seviye; oyun tamamlandi
 
       get().startLevel(next);
+    },
+
+    clearCombo: () => {
+      if (get().lastCombo === 0) return;
+      set({ lastCombo: 0 });
     },
 
     retry: () => {

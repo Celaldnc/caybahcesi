@@ -44,6 +44,9 @@ export const Palette = {
   // --- Durum ---
   basari: '#4C8C4A',
   uyari: '#C9541A',
+  // Combo banner zemini. Uzerine TILE_INK.light (#FFFFFF) yaziliyor -> 4.96:1,
+  // WCAG AA (kucuk metin 4.5:1) gecer.
+  comboKiremit: '#C0492D',
 } as const;
 
 const Colors = {
@@ -55,6 +58,10 @@ const Colors = {
     accent: Palette.bogazMavi,
     muted: Palette.notrKoyu,
     slotEmpty: Palette.slotBosAcik,
+    // combo: iki temada da AYNI. Banner kisa omurlu bir kutlama ogesi;
+    // temaya gore degisirse uzerindeki sabit beyaz metnin kontrasti
+    // dogrulanmamis olurdu. Sabit zemin + sabit murekkep = olculmus 4.96:1.
+    combo: Palette.comboKiremit,
     success: Palette.basari,
     warning: Palette.uyari,
     tabIconDefault: Palette.tabIconDefaultAcik,
@@ -68,6 +75,7 @@ const Colors = {
     accent: Palette.nazarAcik,
     muted: Palette.notrAcik,
     slotEmpty: Palette.slotBosKoyu,
+    combo: Palette.comboKiremit,
     success: Palette.basari,
     warning: Palette.uyari,
     tabIconDefault: Palette.tabIconDefaultKoyu,

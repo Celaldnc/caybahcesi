@@ -1,4 +1,4 @@
-import { ALL_FAMILIES, ALL_TILE_IDS, getTileDefinition } from '@/game/core/tiles';
+import { ALL_FAMILIES, ALL_TILE_IDS, FAMILY_SHAPE, getTileDefinition } from '@/game/core/tiles';
 
 import { FAMILY_COLOR, TILE_COLOR, TILE_INK, inkFor, relativeLuminance } from '../tileColors';
 
@@ -202,9 +202,11 @@ describe('FAMILY_COLOR', () => {
   });
 
   /**
-   * ASIL GARANTI: havuzda her aileden en fazla bir tile bulundugu icin
-   * ekranda ayni anda gorunen renkler tam olarak bu 9 renktir. Hepsi
-   * her gorme tipinde birbirinden ayirt edilebilmeli.
+   * ACIKLIK MERDIVENININ basamaklari birbirinden ayrik olmali.
+   *
+   * DIKKAT: bu tablo EKRANDA GORUNMEZ -- havuz her aileden rastgele bir
+   * varyant secer. Bu test merdivenin tasarim ilkesini korur; ekranda
+   * gorunen renklerin olcumu asagida, `TILE_COLOR` bloğunda.
    *
    * ESIK NEDEN 10: CIELAB'da dE>10 "bakar bakmaz fark edilir" kabul edilir.
    * Daha yuksek bir esik denendi ve renkleri doygunluk uclarina itiyor
@@ -292,5 +294,73 @@ describe('inkFor', () => {
       if (l > 0.1833 && l < 0.2232) inDeadZone.push(`${id} (L=${l.toFixed(4)})`);
     }
     expect(inDeadZone).toEqual([]);
+  });
+});
+
+/**
+ * EKRANDA GERCEKTEN GORUNEN RENKLERIN OLCUMU.
+ *
+ * SPRINT 2 KALITE KAPISI BULDU: renk korlugu garantisi RENDER EDILMEYEN
+ * bir tabloyu koruyordu. Test `FAMILY_COLOR` (9 taban renk) uzerinde
+ * olcuyordu ve "en yakin cift 10.0" diyordu; ekranda gorunen ise
+ * `TILE_COLOR` varyantlari (25 renk, 277 aile-caprazi cift) ve orada en
+ * yakin cift 1.66 idi -- yani iki farkli aile pratikte AYNI renkteydi.
+ *
+ * Belirti apacikti ve gozden kacti: `FAMILY_COLOR` uretimde HIC
+ * tuketilmiyor, yalnizca kendi testinde.
+ *
+ * Bu, Sprint 1'deki "form invaryanti yanlis eksende" dersinin ucuncu
+ * tekrari. CLAUDE.md: testi kodun yapisina degil, OYUNUN GERCEGINE gore yaz.
+ */
+describe('TILE_COLOR renk korlugu (ekranda gorunen eksen)', () => {
+  /** Ayni anda ekranda bulunabilen tum renk ciftleri: farkli ailelerden. */
+  const CROSS_FAMILY_PAIRS = ALL_TILE_IDS.flatMap((a, i) =>
+    ALL_TILE_IDS.slice(i + 1)
+      .filter((b) => getTileDefinition(a).family !== getTileDefinition(b).family)
+      .map((b) => [a, b] as const),
+  );
+
+  it('277 aile-caprazi cift denetlenir', () => {
+    // DENETIMIN YAPILDIGINI once iddia et: liste bosalirsa asagidaki
+    // testler sessizce anlamsizlasirdi (CLAUDE.md, vakum kurali).
+    expect(CROSS_FAMILY_PAIRS.length).toBe(277);
+  });
+
+  /**
+   * MANDAL (ratchet), HEDEF DEGIL.
+   *
+   * 5.5 bugun OLCULEN tavandir, arzu edilen esik degil. Esik 10 olurdu;
+   * oraya cikmak varyant sayisini azaltmayi gerektiriyor (bkz.
+   * `tileColors.ts` icindeki olcum notu). Bu test paletin daha KOTUYE
+   * gitmesini engeller; iyilestirme Sprint 3 karari.
+   */
+  it('hicbir aile-caprazi cift olculen tabanin altina dusmez', () => {
+    let worst = Infinity;
+    let worstPair = '';
+
+    for (const [a, b] of CROSS_FAMILY_PAIRS) {
+      const distance = worstCaseDistance(
+        TILE_COLOR[getTileDefinition(a).colorToken],
+        TILE_COLOR[getTileDefinition(b).colorToken],
+      );
+      if (distance < worst) {
+        worst = distance;
+        worstPair = `${a} <-> ${b}`;
+      }
+    }
+
+    // Basarisizlikta SUCLUYU adlandir: "5.6 >= 5.5 degil" degil,
+    // "denizKayik <-> lokumGul = 1.66".
+    expect(worst >= 5.5 ? null : `${worstPair} = ${worst.toFixed(2)}`).toBeNull();
+  });
+
+  /**
+   * FORM birincil kanal oldugu icin renk yakinligi tolere edilebilir --
+   * ama bu ancak bijeksiyon KORUNDUGU surece dogru. Bu test o bagimliligi
+   * gorunur kilar: renk esigi dusuk tutuluyorsa formun garanti olmasi SART.
+   */
+  it('renk toleransi formun bijeksiyonuna dayanir', () => {
+    const shapes = ALL_FAMILIES.map((family) => FAMILY_SHAPE[family]);
+    expect(new Set(shapes).size).toBe(ALL_FAMILIES.length);
   });
 });

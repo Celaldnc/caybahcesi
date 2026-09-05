@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
+import { TILE_UI, TOUCH } from '@/constants/config';
 import { ALL_TILE_IDS, createTile, getTileDefinition } from '@/game/core/tiles';
 import type { TileId } from '@/game/core/types';
-import { TILE_COLOR, inkFor } from '@/game/data/tileColors';
+import { TILE_BORDER_WIDTH, TILE_COLOR, inkFor } from '@/game/data/tileColors';
 
 import { TilePreview } from '../TilePreview';
 
@@ -30,7 +31,74 @@ describe('TilePreview', () => {
 
   it('secili durumu ekran okuyucuya bildirir', async () => {
     await render(<TilePreview tile={createTile(A)} size={40} selected onPress={jest.fn()} />);
-    expect(screen.getByRole('button')).toHaveProp('accessibilityState', { selected: true });
+    expect(screen.getByRole('button', { selected: true })).toBeOnTheScreen();
+  });
+
+  /**
+   * SECIM GORSEL OLARAK DA belli olmali: `accessibilityState` goren
+   * oyuncuya hicbir sey soylemez. Mutasyon testi bu iddiayi olmadan
+   * `styles.selected`'in tamamen kaldirilmasini yakalamiyordu.
+   */
+  it('secili tile buyutulerek isaretlenir', async () => {
+    await render(<TilePreview tile={createTile(A)} size={40} selected testID="t" />);
+    expect(screen.getByTestId('t')).toHaveStyle({
+      transform: [{ scale: TILE_UI.SELECTED_SCALE }],
+    });
+  });
+
+  /**
+   * DEVRE DISI durum ekran okuyucuya BILDIRILMELI. Sprint 2'de tepsi oyun
+   * bittikten sonra da basilabilir goruntudeydi: dokunus haptik titresim
+   * veriyor, store sessizce reddediyordu -- yerine getirilmeyen vaat.
+   */
+  it('devre disi tile dokunma almaz ve durumu bildirilir', async () => {
+    const onPress = jest.fn();
+    await render(<TilePreview tile={createTile(A)} size={40} disabled onPress={onPress} />);
+
+    const button = screen.getByRole('button');
+    expect(button).toHaveProp('accessibilityState', expect.objectContaining({ disabled: true }));
+
+    await fireEvent.press(button);
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  /**
+   * KENARLIK PAZARLIK EDILEMEZ: aciklik merdiveninin iki ucu kendi
+   * renginde bir zemine karisir (en acik tile acik temada, en koyu tile
+   * koyu temada). Kenarlik silueti zeminden ayirir; 0 olursa tile
+   * kaybolur. Mutasyon testinde `borderWidth: 0` hicbir testi kirmiyordu.
+   */
+  it('tile her zaman kenarlikli cizilir', async () => {
+    await render(<TilePreview tile={createTile(A)} size={40} testID="t" />);
+    expect(screen.getByTestId('t')).toHaveStyle({ borderWidth: TILE_BORDER_WIDTH });
+  });
+
+  /**
+   * GLIF FONT OLCEKLEMESINE UYMAZ -- ve bu erisilebilirlik GEREGIDIR.
+   * Varsayilan `allowFontScaling` ile iOS AX5 (~3x) olceginde 26pt tile'da
+   * 34pt glif olusur, kirpilir ve ALTINDAKI ShapeMark'i kapatir: yaziyi
+   * buyuten az goren kullanici tam da dusuk gorus icin tasarlanan birincil
+   * form kanalini kaybeder.
+   */
+  it('glif font olceklemesini takip etmez', async () => {
+    await render(<TilePreview tile={createTile(A)} size={40} testID="t" />);
+    // Glif erisilebilirlik agacindan gizli; sorgu bunu acikca istemeli.
+    const glyph = screen.getByTestId('t-glif', { includeHiddenElements: true });
+    expect(glyph).toHaveProp('allowFontScaling', false);
+  });
+
+  /**
+   * DOKUNMA HEDEFI. Tile gorsel olarak 44pt'den kucuk olabilir (9 slot dar
+   * ekrana sigmali); hedef `hitSlop` ile tamamlanir. Mutasyon testinde
+   * `hitSlop` tamamen kaldirildiginda hicbir test kirilmiyordu -- yani
+   * "24pt tile bile 48pt hedef sunar" iddiasi korumasizdi.
+   */
+  it('en kucuk tile bile dokunma esigini karsilar', async () => {
+    const size = TILE_UI.MIN_SIZE;
+    await render(<TilePreview tile={createTile(A)} size={size} onPress={jest.fn()} />);
+
+    const slop = screen.getByRole('button').props.hitSlop as number;
+    expect(size + 2 * slop).toBeGreaterThanOrEqual(TOUCH.MIN_TARGET);
   });
 
   it('tile in kendi rengini dolgu olarak kullanir', async () => {

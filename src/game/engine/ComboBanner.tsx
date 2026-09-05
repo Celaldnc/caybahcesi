@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import { Text } from '@/components/Themed';
+import { Text, useThemeColor } from '@/components/Themed';
 import { ANIM, SPACING, TYPO, WEIGHT } from '@/constants/config';
 import { TILE_INK } from '@/game/data/tileColors';
 
@@ -13,8 +13,17 @@ import { TILE_INK } from '@/game/data/tileColors';
  * cikarsa "combo" sozcugu anlamini yitirir; zincir zaten nadir ve
  * bilerek kurulmus bir hamlenin odulu.
  *
+ * `pointerEvents="none"` PAZARLIK EDILEMEZ. Banner `board` kapsayicisinda
+ * mutlak konumlu ve `SlotRow`'un TAM USTUNE dusuyor (~160x45pt). RN'de
+ * dokunma en ustteki hit-test'i gecen View'e gider, altta kalan KARDESE
+ * dusmez -- yani banner gorunurken satirin ortasindaki 4-5 ekleme konumu
+ * tiklanamaz hale geliyordu. Uc ajan bunu birbirinden bagimsiz buldu.
+ * Banner tamamen dekoratif; dokunma almamali.
+ *
  * `accessibilityLiveRegion` / `accessibilityRole="alert"`: ekran okuyucu
- * kullanicisi bannerı goremez, duyurulmali.
+ * kullanicisi banner'i goremez, duyurulmali. NOT: `accessibilityLiveRegion`
+ * yalnizca Android'de calisir; iOS duyurusu ekran tarafindan
+ * `announceForAccessibility` ile yapilir (bkz. `announce.ts`).
  */
 
 export interface ComboBannerProps {
@@ -23,7 +32,13 @@ export interface ComboBannerProps {
   testID?: string;
 }
 
+/** Modul seviyesinde SABIT: her render'da yeni config Reanimated'i yeniden kaydettirir. */
+const BANNER_IN = FadeIn.duration(ANIM.COMBO_FADE_MS);
+const BANNER_OUT = FadeOut.duration(ANIM.COMBO_FADE_MS);
+
 export function ComboBanner({ combo, testID }: ComboBannerProps): ReactElement | null {
+  const background = useThemeColor({}, 'combo');
+
   if (combo <= 1) return null;
 
   const label = `Combo x${combo}!`;
@@ -31,9 +46,10 @@ export function ComboBanner({ combo, testID }: ComboBannerProps): ReactElement |
   return (
     <Animated.View
       testID={testID}
-      entering={FadeIn.duration(ANIM.COMBO_BANNER_MS / 4)}
-      exiting={FadeOut.duration(ANIM.COMBO_BANNER_MS / 4)}
-      style={styles.root}
+      entering={BANNER_IN}
+      exiting={BANNER_OUT}
+      pointerEvents="none"
+      style={[styles.root, { backgroundColor: background }]}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
       accessibilityLabel={label}
@@ -52,7 +68,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.sm,
     borderRadius: SPACING.lg,
-    backgroundColor: '#C0492D',
   },
   text: {
     fontSize: TYPO.heading,

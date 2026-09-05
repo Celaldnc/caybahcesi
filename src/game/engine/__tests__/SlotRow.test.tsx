@@ -1,10 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet, type ViewStyle } from 'react-native';
 
 import { createEmptyRow, insertTile } from '@/game/core/matcher';
 import { createTile, getTileDefinition } from '@/game/core/tiles';
 import type { SlotRow as SlotRowModel, TileId } from '@/game/core/types';
 
-import { SlotRow, insertLabel } from '../SlotRow';
+import { INSERT_UI, TILE_UI, TOUCH } from '@/constants/config';
+
+import { rowWidth } from '../layout';
+import { SlotRow, capacityLabel, insertLabel } from '../SlotRow';
 
 const A: TileId = 'cay-ince-belli';
 const B: TileId = 'kahve-fincan';
@@ -149,5 +153,121 @@ describe('SlotRow', () => {
       'accessibilityHint',
       '2. sırada',
     );
+  });
+
+  /**
+   * DOKUNMA HEDEFI. Gorsel gosterge 4pt genisliginde; hedef `hitSlop` ile
+   * tamamlanir. Sprint 2'de deger 14 yazilmisti -> 4 + 28 = 32pt, oysa
+   * `TOUCH.MIN_TARGET` 48. Config yorumu esigin saglandigini IDDIA
+   * EDIYORDU. Bu test iddiayi CIZILEN elemanda dogrular -- config testi
+   * sayilari, bu test bilesenin onlari gercekten kullandigini pinler.
+   */
+  it('ekleme gostergesinin dokunma hedefi esigi karsilar', async () => {
+    await render(
+      <SlotRow row={rowWith([A, B])} insertEnabled onInsert={noop} tileSize={40} testID="s" />,
+    );
+
+    const indicator = screen.getByTestId('s-insert-0');
+    const hitSlop = indicator.props.hitSlop as { left: number; right: number };
+    // `style` bir DIZI (`[styles.insert, {...}]`); duzlestirilmeden okunmaz.
+    const width = StyleSheet.flatten(indicator.props.style as ViewStyle).width as number;
+
+    expect(width + hitSlop.left + hitSlop.right).toBeGreaterThanOrEqual(TOUCH.MIN_TARGET);
+  });
+
+  /**
+   * GOSTERGE KONUMLARI. Mutasyon testinde `left` degeri 0'a sabitlendiginde
+   * hicbir test kirilmiyordu -- yani "gostergeler tile'larin ARASINDA"
+   * iddiasi korumasizdi. Konum dogrulugu pekala test edilebilir.
+   */
+  it('ekleme gostergeleri soldan saga artan sirada ve esit araliklidir', async () => {
+    const tileSize = 40;
+    await render(
+      <SlotRow
+        row={rowWith([A, B, A])}
+        insertEnabled
+        onInsert={noop}
+        tileSize={tileSize}
+        testID="s"
+      />,
+    );
+
+    const lefts = [0, 1, 2, 3].map(
+      (i) =>
+        StyleSheet.flatten(screen.getByTestId(`s-insert-${i}`).props.style as ViewStyle)
+          .left as number,
+    );
+
+    expect(lefts).toHaveLength(4);
+    for (let i = 1; i < lefts.length; i++) {
+      expect(lefts[i]! - lefts[i - 1]!).toBeCloseTo(tileSize + TILE_UI.GAP, 5);
+    }
+
+    // Kenardaki gostergeler kapsayicinin DISINA tasmamali. Bu ancak
+    // INSERT_UI.WIDTH <= TILE_UI.GAP oldugu surece dogru (config testi zorluyor).
+    expect(lefts[0]!).toBeGreaterThanOrEqual(0);
+    expect(lefts[3]! + INSERT_UI.WIDTH).toBeLessThanOrEqual(rowWidth(tileSize, 7));
+  });
+
+  /**
+   * KAPASITE OZETI -- ekran okuyucunun kaybetme kosulunu gorebilmesi icin.
+   * Bos slotlar duz `View`; goren oyuncu satirin doldugunu bakinca anlar,
+   * ekran okuyucu kullanicisi Sprint 2'de hicbir sekilde anlayamiyordu.
+   */
+  it('satir doluluk ozetini ekran okuyucuya sunar', async () => {
+    await render(
+      <SlotRow
+        row={rowWith([A, B])}
+        insertEnabled={false}
+        onInsert={noop}
+        tileSize={40}
+        testID="s"
+      />,
+    );
+
+    expect(screen.getByTestId('s-kapasite')).toHaveProp('accessibilityLabel', '2 tile, 5 boş slot');
+  });
+
+  /**
+   * BAG: bilesenin cizdigi genislik ile `rowWidth`'in hesabi AYNI olmali.
+   *
+   * Sprint 2'de ayrismislardi: `rowWidth` padding'i saymiyor, bilesen
+   * `+ GAP*2` ekliyordu. Sonuc, `rowOverflows`'un bilesenden daha dar bir
+   * kutuyu olcmesi ve tasmayi hic gormemesiydi. Bu test ikisini birbirine
+   * baglar -- biri degisirse digeri de degismek zorunda.
+   */
+  it('cizilen genislik rowWidth ile birebir ayni', async () => {
+    const tileSize = 36;
+    const capacity = 9;
+    await render(
+      <SlotRow
+        row={rowWith([A, B], capacity)}
+        insertEnabled={false}
+        onInsert={noop}
+        tileSize={tileSize}
+        testID="s"
+      />,
+    );
+
+    const track = screen.getByTestId('s');
+    const root = track.parent!;
+    const width = StyleSheet.flatten(root.props.style as ViewStyle).width as number;
+
+    expect(width).toBe(rowWidth(tileSize, capacity));
+  });
+});
+
+describe('capacityLabel', () => {
+  it('bos satirda tum kapasiteyi bildirir', () => {
+    expect(capacityLabel(0, 7)).toBe('0 tile, 7 boş slot');
+  });
+
+  /** KAYBETME ESIGI ayrica uyarilir -- son slot sirdan bir slot degil. */
+  it('son bos slotta uyarir', () => {
+    expect(capacityLabel(6, 7)).toBe('Son boş slot! 6 tile, 1 yer kaldı');
+  });
+
+  it('dolu satiri bildirir', () => {
+    expect(capacityLabel(7, 7)).toBe('Satır dolu, 7 tile');
   });
 });

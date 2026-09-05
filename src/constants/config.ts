@@ -155,8 +155,17 @@ export const ANIM = {
   MATCH_BURST_MS: 320,
   /** Slot'lar bosluk kapatirken kayma suresi. */
   COLLAPSE_MS: 180,
-  /** Combo banner'inin ekranda kalma suresi. */
+  /**
+   * Combo banner'inin ekranda KALMA suresi.
+   *
+   * Sprint 2 kalite kapisinda yakalandi: bu sabit "ekranda kalma suresi"
+   * diye belgelenmisti ama hicbir yerde zamanlayici yoktu -- banner bir
+   * sonraki hamleye kadar duruyordu. Artik `clearCombo` ile gercekten
+   * uygulaniyor.
+   */
   COMBO_BANNER_MS: 900,
+  /** Banner'in acilma/kapanma gecisi. Kalma suresinden AYRI sabit. */
+  COMBO_FADE_MS: 225,
 } as const;
 
 /** Dokunma hedefi olculeri (pt/dp). iOS HIG >= 44, Material >= 48. */
@@ -309,9 +318,28 @@ export const TILE_UI = {
  * bolgede uste cizilen kazanir ve iki konum da "ayni bolgeye ekle"
  * anlamina gelir. Ekran okuyucu kullanicisi zaten etiketten secer.
  */
+const INSERT_INDICATOR_WIDTH = 4;
+
 export const INSERT_UI = {
-  /** Gorunen gosterge genisligi. */
-  WIDTH: 4,
-  /** hitSlop ile her iki yana eklenen dokunma payi. */
-  TOUCH_PADDING: 14,
+  /**
+   * Gorunen gosterge genisligi.
+   *
+   * TILE_UI.GAP'ten BUYUK OLAMAZ: gosterge bosluklarin tam ortasina
+   * konumlaniyor (`left = GAP + i*step - GAP/2 - WIDTH/2`); genisletilirse
+   * kenardaki iki gosterge kapsayicinin disina tasar.
+   * `config.test.ts` bu iliskiyi zorluyor.
+   */
+  WIDTH: INSERT_INDICATOR_WIDTH,
+  /**
+   * hitSlop ile her iki yana eklenen dokunma payi.
+   *
+   * TURETILMIS, literal degil. Sprint 2 kalite kapisinda uc ajan birbirinden
+   * bagimsiz olarak ayni seyi buldu: deger 14 yazildiginda gercek dokunma
+   * hedefi 4 + 2*14 = 32pt oluyordu -- yorum HIG/Material esiginin
+   * saglandigini iddia ederken aritmetik tam tersini soyluyordu.
+   * Sayiyi config'e koymak yetmiyor; ILISKIYI de config'e koymak gerekiyor.
+   */
+  TOUCH_PADDING: (TOUCH.MIN_TARGET - INSERT_INDICATOR_WIDTH) / 2,
+  /** Gostergenin yuksekligi, tile boyutunun orani. */
+  HEIGHT_RATIO: 0.92,
 } as const;

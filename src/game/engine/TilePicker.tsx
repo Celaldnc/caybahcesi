@@ -18,14 +18,28 @@ import { TilePreview } from './TilePreview';
  * kullaniciya da ayni yolu verir.
  *
  * Tile'lar `FadeIn`/`FadeOut` + `LinearTransition` ile girip cikar; secilen
- * tile satira gidince yerine yenisi akar.
+ * tile satira gidince yerine yenisi akar. Animasyon config'leri MODUL
+ * SEVIYESINDE sabit -- gerekce icin bkz. `SlotRow.tsx` (Reanimated'in
+ * kimlik kontrolu her render'da yeni nesne gorurse animasyonu yeniden
+ * kaydediyor).
+ *
+ * `enabled=false` iken (seviye bitti / oyun bitti) tile'lar devre disi.
+ * Aksi halde oyuncu dokunuyor, haptik titresim aliyor ve HICBIR SEY
+ * olmuyordu: store `status !== 'oynaniyor'` diye sessizce reddediyordu.
+ * Sahte geri bildirim, geri bildirim yoklugundan kotudur.
  */
+
+const TRAY_IN = FadeIn.duration(ANIM.PLACE_MS);
+const TRAY_OUT = FadeOut.duration(ANIM.PLACE_MS);
+const TRAY_LAYOUT = LinearTransition.duration(ANIM.PLACE_MS);
 
 export interface TilePickerProps {
   tray: Tray;
   selectedIndex: number | null;
   onSelect: (index: number) => void;
   tileSize: number;
+  /** Oyun devam ediyor mu? false ise tile'lar devre disi. */
+  enabled?: boolean;
   testID?: string;
 }
 
@@ -34,6 +48,7 @@ export function TilePicker({
   selectedIndex,
   onSelect,
   tileSize,
+  enabled = true,
   testID,
 }: TilePickerProps): ReactElement {
   const surface = useThemeColor({}, 'surface');
@@ -46,21 +61,19 @@ export function TilePicker({
       accessibilityLabel={`Seçilebilir ${tray.length} tile`}
     >
       {tray.map((tile, index) => (
-        <Animated.View
-          key={tile.key}
-          entering={FadeIn.duration(ANIM.PLACE_MS)}
-          exiting={FadeOut.duration(ANIM.PLACE_MS)}
-          layout={LinearTransition.duration(ANIM.PLACE_MS)}
-        >
+        <Animated.View key={tile.key} entering={TRAY_IN} exiting={TRAY_OUT} layout={TRAY_LAYOUT}>
           <TilePreview
             tile={tile}
             size={tileSize}
             selected={selectedIndex === index}
             onPress={() => onSelect(index)}
+            disabled={!enabled}
             accessibilityHint={
-              selectedIndex === index
-                ? 'Seçili. Seçimi kaldırmak için tekrar dokun.'
-                : `${getTileDefinition(tile.id).nameTr} seçilir, sonra satırdaki konuma dokun.`
+              !enabled
+                ? 'Oyun bitti, seçim yapılamaz.'
+                : selectedIndex === index
+                  ? 'Seçili. Seçimi kaldırmak için tekrar dokun.'
+                  : `${getTileDefinition(tile.id).nameTr} seçilir, sonra satırdaki konuma dokun.`
             }
             testID={testID === undefined ? undefined : `${testID}-tile-${index}`}
           />

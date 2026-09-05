@@ -10,15 +10,21 @@ import { TILE_UI } from '@/constants/config';
  */
 
 /**
- * Bir satirin toplam genisligi.
+ * Bir satirin CIZILEN toplam genisligi.
  *
  * Ekleme gostergeleri MUTLAK konumlandirildigi icin genislik TUKETMEZ;
- * satirin eni yalnizca tile'lar ve aralarindaki bosluklardir.
- * (Ilk tasarimda gostergeler yer kapliyordu ve 9 slotlu satir hicbir
- * telefona sigmiyordu -- layout testi yakaladi.)
+ * satirin eni tile'lar + aralarindaki bosluklar + `track`'in iki yanindaki
+ * `paddingHorizontal: GAP`'tir.
+ *
+ * SON TERIM SPRINT 2 KALITE KAPISINDA EKLENDI. Onceki hali padding'i
+ * saymiyordu, yani `rowOverflows` bilesenin gercek genisligini degil daha
+ * darini olcuyordu: test edilen 21 ekran/slot kombinasyonunun 19'unda
+ * "sigiyor" diyor, satir gercekte 1-8pt tasiyordu. Olcum dogruydu, OLCULEN
+ * SEY yanlisti -- Sprint 1'deki "yanlis olan palet degil metrikti" dersinin
+ * ayni ekseni.
  */
 export function rowWidth(tileSize: number, slotCount: number): number {
-  return slotCount * tileSize + Math.max(0, slotCount - 1) * TILE_UI.GAP;
+  return slotCount * tileSize + Math.max(0, slotCount - 1) * TILE_UI.GAP + TILE_UI.GAP * 2;
 }
 
 /**
@@ -36,8 +42,9 @@ export function computeTileSize(availableWidth: number, slotCount: number): numb
     throw new RangeError(`Slot sayisi pozitif tam sayi olmali, alinan: ${slotCount}`);
   }
 
-  const gaps = Math.max(0, slotCount - 1) * TILE_UI.GAP;
-  const perTile = (availableWidth - gaps) / slotCount;
+  // `rowWidth` ile ayni muhasebe: bosluklar + iki yandaki padding.
+  const chrome = Math.max(0, slotCount - 1) * TILE_UI.GAP + TILE_UI.GAP * 2;
+  const perTile = (availableWidth - chrome) / slotCount;
 
   return Math.max(TILE_UI.MIN_SIZE, Math.min(TILE_UI.MAX_SIZE, Math.floor(perTile)));
 }

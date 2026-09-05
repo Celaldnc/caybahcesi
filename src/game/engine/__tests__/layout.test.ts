@@ -1,4 +1,4 @@
-import { SLOTS, TILE_UI } from '@/constants/config';
+import { SLOTS, SPACING, TILE_UI } from '@/constants/config';
 
 import { computeTileSize, rowOverflows, rowWidth } from '../layout';
 
@@ -54,6 +54,13 @@ describe('gercek cihaz genislikleri', () => {
    * 320pt iPhone SE (1. nesil) genisligidir; ekran kenar boslugu dustukten
    * sonra ~272pt kalir. Bu test gecmezse `SlotRow` kaydirmali bir kapsayiciya
    * alinmali -- sessizce tasmasina izin verilmemeli.
+   *
+   * SPRINT 2 KALITE KAPISI: bu testler ZATEN GECIYORDU ama `rowWidth`
+   * bilesenin `paddingHorizontal`ini saymadigi icin YANLIS GENISLIGI
+   * olcuyorlardi -- 21 ekran/slot kombinasyonunun 19'unda satir gercekte
+   * 1-8pt tasiyordu ve test "sigiyor" diyordu. Olcum dogruydu, olculen sey
+   * yanlisti. `rowWidth` duzeltildi; asagidaki `SlotRow` testi ikisinin
+   * ayrismasini da engelliyor.
    */
   const DEVICES: readonly (readonly [string, number])[] = [
     ['iPhone SE (320)', 320],
@@ -63,17 +70,17 @@ describe('gercek cihaz genislikleri', () => {
   ];
 
   it.each(DEVICES)('%s: en zor seviye (9 slot) tasmadan sigar', (_name, width) => {
-    const available = width - 2 * 24; // ekran kenar bosluklari
+    const available = width - 2 * SPACING.xl; // ekran kenar bosluklari
     expect(rowOverflows(available, SLOTS.MAX)).toBe(false);
   });
 
   it.each(DEVICES)('%s: baslangic seviyesi (7 slot) tasmadan sigar', (_name, width) => {
-    const available = width - 2 * 24;
+    const available = width - 2 * SPACING.xl;
     expect(rowOverflows(available, SLOTS.INITIAL)).toBe(false);
   });
 
   it('hesaplanan boyut en dar cihazda bile okunabilir kalir', () => {
-    const available = 320 - 48;
+    const available = 320 - 2 * SPACING.xl;
     expect(computeTileSize(available, SLOTS.MAX)).toBeGreaterThanOrEqual(TILE_UI.MIN_SIZE);
   });
 });

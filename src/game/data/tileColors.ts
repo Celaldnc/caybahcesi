@@ -21,7 +21,14 @@ import type { TileColorToken, TileFamily } from '@/game/core/types';
  */
 
 /**
- * Her ailenin temel rengi -- ekranda ayni anda bulunabilen 9 renk.
+ * Her ailenin temel rengi -- ACIKLIK MERDIVENININ basamaklari.
+ *
+ * DIKKAT: bunlar ekranda gorunen renkler DEGILDIR. Havuz her aileden
+ * rastgele bir VARYANT secer (bkz. TILE_COLOR), tabani degil. Bu dosya
+ * Sprint 2'ye kadar "ekranda ayni anda bulunabilen 9 renk" diyordu ve
+ * renk korlugu testi de bu tabloyu olcuyordu -- yani GARANTI, RENDER
+ * EDILMEYEN BIR TABLOYU koruyordu. Gercek olcum TILE_COLOR uzerinde
+ * yapilir; asagida.
  *
  * ACIKLIK MERDIVENI (koyudan aciga): kahve, nazar, cay, deniz, pide, kedi,
  * lokum, firin, balik.
@@ -63,6 +70,32 @@ export const FAMILY_COLOR = {
  * diye tanimasi.
  *
  * Hepsi MUREKKEP OLU BOLGESININ disinda (bkz. INK_THRESHOLD).
+ *
+ * ---------------------------------------------------------------------------
+ * AILE-CAPRAZI OLCUM (Sprint 2 kalite kapisi)
+ *
+ * Ekranda ayni anda gorunen renkler BUNLARDIR, FAMILY_COLOR degil. 277
+ * aile-caprazi ciftte olculdu (CIELAB dE76, uc renk korlugu simulasyonunun
+ * en kotusu):
+ *
+ *   once:  en yakin cift 1.66 (denizKayik <-> lokumGul) -- pratikte AYNI renk
+ *   simdi: en yakin cift 5.60 (kediVan <-> lokumFistik)
+ *
+ * Duzeltme kisitli bir optimizasyonla bulundu: her varyant aile tabanindan
+ * CIELAB L* ekseninde en fazla 14 uzaklasabilir (aile kimligi korunsun),
+ * aile ici ayrim gerilemesin (>= 6.12) ve murekkep olu bolgesine girmesin.
+ *
+ * KISITSIZ optimizasyon 9.38'e cikiyordu ama denizKayik'i #0D2422'ye,
+ * firinAcma'yi #231B06'ya itiyordu -- yani rengi "deniz" ve "firin" olmaktan
+ * cikariyordu. Taban paleti tasarlarken olculen ayni basarisizlik modu.
+ *
+ * TAVAN 5.60'TIR, esik 10 DEGIL. Sebep yapisal: 9 basamakli aciklik
+ * merdivenine 25 renk sigdirilinca varyantlar komsu basamaklara tasiyor.
+ * 10'un uzerine cikmak varyant sayisini azaltmayi gerektirir -- Sprint 3
+ * karari. Bugun kabul edilebilir olmasinin sebebi FORMUN birincil kanal
+ * olmasi ve bunun MATEMATIKSEL garanti olmasi (9 aile <-> 9 form
+ * bijeksiyonu + havuzda aile basina en fazla bir tile).
+ * ---------------------------------------------------------------------------
  */
 export const TILE_COLOR = {
   // kahve
@@ -72,7 +105,7 @@ export const TILE_COLOR = {
   // nazar
   nazarMavi: '#264A72',
   nazarYesil: '#1F3D5E',
-  nazarSiyah: '#2E5989',
+  nazarSiyah: '#162B42',
 
   // cay
   cayInceBelli: '#9C4526',
@@ -81,7 +114,7 @@ export const TILE_COLOR = {
 
   // deniz
   denizVapur: '#2F7F78',
-  denizKayik: '#399B93',
+  denizKayik: '#296E69',
 
   // pide
   pideKiyma: '#7A9A55',
@@ -91,16 +124,16 @@ export const TILE_COLOR = {
   // kedi
   kediTekir: '#AC9C8C',
   kediKara: '#96816D',
-  kediVan: '#C5BAAE',
+  kediVan: '#CCC3B8',
 
   // lokum
   lokumFistik: '#E39BAE',
-  lokumGul: '#D8748F',
+  lokumGul: '#DE889F',
   lokumSade: '#EEC4CF',
 
   // firin
   firinSimit: '#E3BE62',
-  firinAcma: '#CC9C24',
+  firinAcma: '#C59723',
   firinPogaca: '#F3E4BF',
 
   // balik

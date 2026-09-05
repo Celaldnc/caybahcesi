@@ -21,6 +21,13 @@ async function setup(enabled?: boolean) {
 }
 
 describe('useHaptics', () => {
+  /** Varsayilan kullanim: `useHaptics()` -- argumansiz. */
+  it('argumansiz cagrilabilir ve varsayilan olarak aciktir', async () => {
+    const { result } = await renderHook(() => useHaptics());
+    result.current('sec');
+    expect(mocked.selectionAsync).toHaveBeenCalled();
+  });
+
   it('secim geri bildirimini tetikler', async () => {
     (await setup())('sec');
     expect(mocked.selectionAsync).toHaveBeenCalled();

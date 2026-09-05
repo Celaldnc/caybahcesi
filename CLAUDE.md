@@ -33,9 +33,19 @@ expect(violations).toBe(0);
 
 Sprint 1'de 48 mutant denendi, 16'sı hayatta kaldı. Coverage "çalıştırıldı" demek, "doğrulandı" demek değil. Yeni bir invaryant yazarken sor: **bu kuralı tersine çevirsem hangi test kırılır?** Kırılan yoksa test değil, dekorasyon.
 
-### İnvaryantı DOĞRU eksende yaz
+### İnvaryantı DOĞRU eksende yaz — bu hata üç kez tekrarlandı
 
-"Aynı ailedeki tile'lar farklı forma sahiptir" testi oyunda **hiç gerçekleşmeyen** bir senaryoyu koruyordu (`pickTilePool` aynı aileden iki tile seçmiyor). Her zaman gerçekleşen senaryo korumasızdı: havuzların %99.83'ünde form çakışması vardı. **Testi kodun yapısına değil, oyunun gerçeğine göre yaz.**
+Aynı hata sınıfı, üç farklı eksende:
+
+| #        | Test neyi ölçüyordu                                                                 | Ekranda/oyunda ne var                                                                                                   | Nasıl anlaşıldı    |
+| -------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| Sprint 1 | "Aynı ailedeki tile'lar farklı forma sahip" — oyunda **hiç gerçekleşmeyen** senaryo | Havuzların %99.83'ünde form çakışması vardı                                                                             | mutasyon           |
+| Sprint 2 | `FAMILY_COLOR` (9 taban renk) üzerinde renk körlüğü ΔE                              | Ekranda `TILE_COLOR` **varyantları** görünüyor (25 renk, 277 çift) — min ΔE 10.0 değil **1.66**                         | refactor ajanı     |
+| Sprint 2 | `rowWidth` = tile'lar + boşluklar                                                   | Bileşen ayrıca `paddingHorizontal` çiziyordu — 21 kombinasyonun **19'unda** satır 1-8pt taşıyor, test "sığıyor" diyordu | kod inceleme ajanı |
+
+**Ortak belirti — bunu arayın:** ölçülen tablo/fonksiyon **üretimde hiç tüketilmiyordu.** `FAMILY_COLOR` yalnızca kendi testinde geçiyordu. Bir garantinin dayandığı şey üretim kodunda kullanılmıyorsa, garanti yanlış eksende demektir.
+
+**Testi kodun yapısına değil, oyunun gerçeğine göre yaz.** Ölçüm doğru olabilir; sorulması gereken **ölçülen şeyin doğru olup olmadığıdır.**
 
 ### Test yardımcıları da ölçülür
 
@@ -57,6 +67,22 @@ const slot = row[index]!;
 ```
 
 Sınır _dışı_ erişim (`row[i - 1]`) gerçekten `undefined` dönebilir — orada kontrol meşrudur.
+
+### Config'e sayıyı koymak yetmez — İLİŞKİYİ koy
+
+`INSERT_UI.TOUCH_PADDING: 14` yazılmıştı ve yorumu "hitSlop ile HIG/Material eşiğine tamamlanır" diyordu. Aritmetik: `4 + 2×14 = 32pt`, oysa `TOUCH.MIN_TARGET` 48. **Yorum bir şey iddia ediyor, sayı başkasını söylüyordu** — üç ajan bunu birbirinden bağımsız buldu.
+
+Türetilebilen değeri türet, sonra ilişkiyi teste yaz:
+
+```ts
+TOUCH_PADDING: (TOUCH.MIN_TARGET - INSERT_INDICATOR_WIDTH) / 2,
+```
+
+```ts
+expect(INSERT_UI.WIDTH + 2 * INSERT_UI.TOUCH_PADDING).toBeGreaterThanOrEqual(TOUCH.MIN_TARGET);
+```
+
+Aynı sınıftan ikinci bulgu: `left = GAP + i*step - GAP/2 - WIDTH/2` formülü **yalnızca `INSERT_UI.WIDTH <= TILE_UI.GAP` olduğu için** doğruydu (4 === 4, tesadüfen). Ne belgeliydi ne test edilmişti. Bir formül iki sabitin ilişkisine dayanıyorsa o ilişki `config.test.ts`'e yazılır.
 
 ### Boş-koleksiyon sorununu tipe taşı
 
@@ -106,9 +132,65 @@ await act(async () => {
 
 `const SUPPORTED = Platform.OS === 'ios'` yazarsan testte platformu değiştiremezsin ve test "fonksiyon var mı" demekten öteye gidemez. Çağrı anında oku (`isSupported()`) — maliyeti bir özellik erişimi, karşılığı gerçek bir test.
 
+### Reanimated: animasyon config'i MODÜL SEVİYESİNDE olmalı
+
+`layout={LinearTransition.duration(X)}` render içinde yazılırsa her render'da **yeni nesne** üretir. Reanimated'in `_configureLayoutAnimation`'ı `currentConfig === previousConfig` **kimlik** kontrolü yapar ([AnimatedComponent.js:224,268](node_modules/react-native-reanimated/lib/module/createAnimatedComponent/AnimatedComponent.js)) — kontrol her zaman düşer ve layout animasyonu **her commit'te yeniden kaydedilir** (`createSerializable` + JSI batch).
+
+Ölçüldü (aynı koşu içinde dönüşümlü A/B, 9 tile): **2.03 ms → 11.56 ms**, commit başına ceza **6.6-9.5 ms** — 16.67 ms kare bütçesinin yarısından fazlası. Jest'te worklet serileştirmesi mock'lu olduğu için cihazdaki maliyet daha yüksek olabilir.
+
+Sessiz tuzak: config'i tekrar render içine alan biri hiçbir testi kırmaz. `SlotRow`/`TilePicker`/`ComboBanner` sabitleri modül seviyesinde tutulmalı.
+
+### `React.memo` yalnızca callback KARARLIYSA kazandırır
+
+Ölçüldü, 12 tile:
+
+| kurulum                  | süre        | render |
+| ------------------------ | ----------- | ------ |
+| memo yok                 | 5.6 ms      | 12/12  |
+| memo + kararlı `onPress` | **0.29 ms** | 0/12   |
+| memo + inline `onPress`  | **11.7 ms** | 12/12  |
+
+`memo`'yu `useCallback` olmadan eklemek düz halden **2× yavaş** — karşılaştırma maliyeti eklenir, kazanç sıfır. İkisi birlikte yapılır ya da hiç yapılmaz.
+
+**Optimize ETMEYİN (ölçüldü, bütçenin %0.01'i):** `computeTileSize` (0.0015 ms), `getTileDefinition` ×12 (<0.0001 ms), `tilesOf`+`insertPositions`+`map` (0.0016 ms). `useMemo` sarmalayıcısı bunlardan pahalı.
+
 ### Renk metriği: lineer RGB değil CIELAB
 
 Lineer RGB'de Euclid mesafesi karanlık uçta sıkışır; iki koyu renk algısal olarak rahat ayrılsa bile küçük değer verir. Palet ölçümünde tam bu yaşandı — `kahve/nazar/cay` üçlüsü "çok yakın" görünüyordu, CIELAB'da 20+ ΔE ile ayrıktılar. **Yanlış olan palet değil metrikti.**
+
+### Ekran testlerinde tohumu SABİTLE
+
+`GameScreen` `startLevel(level)`'i tohumsuz çağırır → `Math.random()`. Sonuç: **kapsam yüzdesi koşudan koşuya değişiyordu** (ölçüldü: `[level].tsx` 100/96 → 97.22/88 → 97.22/88). Global eşik %70 olduğu için kapı düşmüyordu ama raporlanan rakam tekrarlanabilir değildi. `beforeEach`'te `jest.spyOn(Math, 'random')` + LCG ile sabitlendi; üç ardışık koşu artık birebir aynı.
+
+Yan fayda: `startLevel` tohum için **tam olarak bir** `Math.random()` çağırır (havuz/tepsi tohumlanmış `Rng`'den gelir), yani **random çağrı sayısı = kurulum sayısı**. "Sonraki seviye seviyeyi bir kez kurar" regresyonu böyle ölçülüyor.
+
+### Ekran okuyucu: etiket ≠ geri bildirim
+
+Sprint 2'de etiketleme kusursuzdu — her hedefin adı, rolü, ipucu vardı, `insertLabel` ekleme modelini kelimeye çeviriyordu. Yine de erişilebilirlik denetimi **P0** verdi: _"görme engelli bir oyuncu bu oyunu şu an oynayamaz."_ Sebep: `announceForAccessibility` kod tabanında **sıfır** kez geçiyordu. Oyuncu hamle _yapabiliyor_, hamlenin _ne yaptığını_ öğrenemiyordu.
+
+Kural: **her durum değişikliğinin bir duyuru kanalı olmalı.** `accessibilityLiveRegion` yetmez — yalnızca Android'de çalışır.
+
+Üç ek tuzak aynı denetimden:
+
+- **`allowFontScaling` erişilebilirliği BOZABİLİR.** Glif `Text`'inde açık kalınca iOS AX5 (~3×) ölçeğinde 26pt tile'da 34pt glif oluşuyor, kırpılıyor ve **altındaki `ShapeMark`'ı kapatıyor** — yazıyı büyüten az gören kullanıcı, tam da düşük görüş için tasarlanan birincil form kanalını kaybediyor. Dekoratif, ölçüsü kabına bağlı metinlerde `allowFontScaling={false}` doğru karardır.
+- **Mutlak konumlu dekoratif katman `pointerEvents="none"` almalı.** `ComboBanner` `SlotRow`'un üstüne düşüyordu; RN'de dokunma en üstteki hit-test'i geçen View'e gider, **kardeşe düşmez** → satırın ortasındaki ekleme konumları tıklanamaz hale geliyordu.
+- **Devre dışı bırakılmayan kontrol yalan söyler.** Oyun bittikten sonra tepsi basılabilir kalıyor, `haptic('sec')` titreşim veriyor, store sessizce reddediyordu. Sprint 0'da ana ekran için yazılan kural burada ihlal edilmişti: _"butonu etkin bırakıp hiçbir şey yapmamak, ekran okuyucu kullanıcısına yerine getirilmeyen bir vaat verir."_
+
+### RNTL: `accessibilityViewIsModal` arkadaki ağacı SORGULARDAN da gizler
+
+Bitiş overlay'ine modal işareti konunca `getByTestId('tepsi-tile-0')` artık bulamaz — bu **istenen davranıştır** (ekran okuyucu odağı overlay'e hapsolur). Arkadaki elemanı test edecekseniz açıkça isteyin:
+
+```ts
+screen.getByTestId('tepsi-tile-0', { includeHiddenElements: true });
+```
+
+Aynısı `accessibilityElementsHidden` için de geçerli (glif `Text`'i).
+
+### Store singleton + effect sırası = bayat duyuru
+
+`useGameStore` bir singleton. Ekrana geri dönüldüğünde önceki oyunun `moves` değerini taşıyor olabilir. Effect'ler bildirim sırasıyla koşar: `startLevel` etkisi state'i sıfırlayana kadar sonraki effect'in render closure'ı **hâlâ eski `moves`'u görür** ve bayat bir hamleyi duyurur. Testte yakalandı (açılışta 1 yerine 2 duyuru) — üretimde de gerçek bir hataydı.
+
+Çözüm: mount'ta **taban al, duyurma** (`useRef<string | null>(null)`).
 
 ## Bu projede yanan tuzaklar (tekrar düşme)
 
@@ -174,6 +256,16 @@ Modül yeniden yüklemek için `resetModules`/`isolateModules` kullanırsan, tes
 
 `eslint-config-expo@57` düşürdü (upstream bakımsız). `react-native/no-inline-styles` çalışmaz — yerine [eslint.config.js](eslint.config.js) içinde AST seçicili `no-restricted-syntax` var.
 
+### Windows: `node_modules` junction + `git worktree remove --force` = felaket
+
+Sprint 1 bundle'ını ölçmek için worktree'ye `node_modules` junction'ı kuruldu. `git worktree remove --force` **junction'ın içine girip gerçek `node_modules`'ün bir kısmını sildi** (`expo` dahil). Onarım `rm -rf node_modules && npm ci`.
+
+Junction yerine gerçek kopya ya da `--no-checkout` kullanın. (Aynı oturumda `npx --yes jest@30` de ağacı yeniden çözüp `node_modules`'ü boşalttı — geçici araçları `npx --yes <paket>@<farklı sürüm>` ile çalıştırmayın.)
+
+### `expo prebuild` mutasyonu DETERMİNİSTİK DEĞİL
+
+CLAUDE.md "`package.json`'ı sessizce değiştirir" diyordu. Prebuild boyunca 400 kez md5 örneklendi: mutasyon **her koşuda kalıcı olmuyor** — bir koşuda geri döndü, enstrümante koşuda kaldı. Yani "bir kez baktım, temizdi" güvenilmez. Kural sertleşti: prebuild sonrası **her zaman** `git checkout -- package.json`.
+
 ### Windows: satır sonları
 
 [.gitattributes](.gitattributes) ile depo LF'e sabit. Python'la dosya yazarken `newline='\n'` ver; yoksa Prettier "Delete ␍" hatası yağar.
@@ -201,7 +293,7 @@ Düz string olarak yazılırsa Android'e `RECORD_AUDIO` + `FOREGROUND_SERVICE`, 
   - `uuid` ← `xcode` ← `@expo/config-plugins`: gerçekten **yalnızca build-time** (prebuild/Node), Metro'ya girmiyor.
   - `decode-uri-component` ← `query-string` ← `expo-router`: **bundle'a giriyor** (expo-router runtime modülleri modül seviyesinde `require` ediyor). Ancak açık yalnızca `parse()` yolundan erişilebilir ve expo-router o fonksiyonu fork'layıp native `URLSearchParams`'a çevirmiş — çağrılmıyor. Yani _sömürülebilir değil, ama "build-time only" de değil_: gemide taşınan ölü kod. Uygulama kodundan **asla** `queryString.parse` çağırma.
   - `npm audit fix --force` Expo'yu kırar — **çalıştırma**.
-- **Kalan tek coverage boşluğu** (bilinçli): `(tabs)/index.tsx`'teki devre dışı butonun boş `onPress`'i — Sprint 2'de router'a bağlanacak.
+- **Renk körlüğü tavanı 5.6 ΔE, eşik 10 DEĞİL.** Ekranda görünen 25 rengin 277 aile-çaprazı çiftinde ölçülen en yakın çift. Sprint 2'de 1.66'ydı (iki aile pratikte aynı renkti); kısıtlı optimizasyonla (aile kimliği ΔL* ≤ 14, aile içi ayrım gerilemesin, mürekkep ölü bölgesi dışı) 5.6'ya çıkarıldı. Kısıtsız optimizasyon 9.38 veriyor **ama** `denizKayik`'i `#0D2422`'ye itiyor — artık "deniz" değil. 10'un üzerine çıkmak **varyant sayısını azaltmayı** gerektirir; Sprint 3 kararı. Bugün kabul edilebilir olmasının sebebi formun birincil kanal olması ve bunun matematiksel garanti olması. Test bir **mandaldır (ratchet)**, hedef değil.
 - **Web ikincil hedeftir, SPA modunda.** `npm run web` hızlı göz kontrolü için; birincil hedef iOS + Android. `output: "single"` seçildi → sunucu render'ı ve hidrasyon yok. Bu sayede `+html.tsx`, `useClientOnlyValue` (native + web) ve `useColorScheme.web.ts` dosyalarının hepsi silindi; jest-expo çok-platformlu `projects` kurulumu ihtiyacı da ortadan kalktı.
 
 ## Komutlar

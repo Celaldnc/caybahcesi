@@ -1,6 +1,15 @@
 import { getLevelConfig } from '@/game/core/level';
-import { countEmpty, insertPositions, isRowFull, tileCount } from '@/game/core/matcher';
+import {
+  countEmpty,
+  insertPositions,
+  insertTile,
+  isRowFull,
+  resolve,
+  tileCount,
+} from '@/game/core/matcher';
 import { dailySeed } from '@/game/core/rng';
+import { createTile } from '@/game/core/tiles';
+import type { SlotRow as SlotRowModel } from '@/game/core/types';
 
 import { createGameStore, type GameStore } from '../gameStore';
 
@@ -15,29 +24,41 @@ function makeStore() {
   return createGameStore();
 }
 
-/** Hedefe ulasana ya da tahta dolana kadar ac gozlu oynar. */
+/**
+ * Hedefe ulasana ya da tahta dolana kadar oynar.
+ *
+ * SPRINT 2 KALITE KAPISINDA DUZELTILDI. Onceki hali "eslesme yaratan ilk
+ * hamleyi bul" diye yorumlanmisti ama ic dongu KOSULSUZ `break` ediyordu:
+ * her tur tray[0]'i konum 0'a koyuyordu. Olculdu -- 400 kosuda 400 kayip,
+ * 0 galibiyet, hamlelerin %76'si hic puan getirmiyordu. Yani "oyun bir
+ * sonuca ulasir" diyen testler yalnizca KAYBETME yolunu geziyordu.
+ *
+ * Yeni hali secimi STORE'U KIRLETMEDEN, core'un saf fonksiyonlariyla
+ * ONCEDEN hesaplar: `resolve(insertTile(...))` kaldirma sayisini verir.
+ */
+function findScoringMove(state: GameStore): { tray: number; position: number } | null {
+  for (let t = 0; t < state.tray.length; t++) {
+    const tile = state.tray[t]!;
+    for (const position of insertPositions(state.row)) {
+      if (resolve(insertTile(state.row, position, tile)).removedCount > 0) {
+        return { tray: t, position };
+      }
+    }
+  }
+  return null;
+}
+
 function playUntilEnd(store: ReturnType<typeof makeStore>, maxMoves = 400): GameStore {
   for (let i = 0; i < maxMoves; i++) {
     const state = store.getState();
     if (state.status !== 'oynaniyor') break;
 
-    // Eslesme yaratan ilk hamleyi bul, yoksa ilk konuma koy.
-    let played = false;
-    for (let t = 0; t < state.tray.length && !played; t++) {
-      for (const position of insertPositions(state.row)) {
-        store.getState().selectTray(t);
-        const before = store.getState().score;
-        store.getState().insertAt(position);
-        if (store.getState().score > before) {
-          played = true;
-          break;
-        }
-        // Puan getirmediyse geri alamayiz; bu hamle gecerliydi, devam et.
-        played = true;
-        break;
-      }
-    }
-    if (!played) break;
+    const positions = insertPositions(state.row);
+    if (positions.length === 0 || state.tray.length === 0) break;
+
+    const move = findScoringMove(state) ?? { tray: 0, position: positions[0]! };
+    store.getState().selectTray(move.tray);
+    store.getState().insertAt(move.position);
   }
   return store.getState();
 }
@@ -295,12 +316,6 @@ describe('insertAt', () => {
 });
 
 describe('gecis kurallari', () => {
-  /**
-   * Sira: once "seviye tamam mi", sonra "tahta doldu mu".
-   *
-   * Ters sirada yazilsaydi oyuncu hedefe ulastigi hamlede kaybedebilirdi --
-   * en can sikici hata turu. Asagidaki test bu sirayi DOGRUDAN pinler.
-   */
   it('skor hedefe ulasinca seviye tamamlanir', () => {
     const store = makeStore();
     store.getState().startLevel(1, 1);
@@ -311,6 +326,57 @@ describe('gecis kurallari', () => {
     store.getState().insertAt(0);
 
     expect(store.getState().status).toBe('seviye-tamam');
+  });
+
+  /**
+   * SIRA TESTI -- yukaridaki test bunu YAPMIYORDU.
+   *
+   * Sprint 2 kalite kapisi mutasyonla yakaladi: `isLevelComplete` ile
+   * `isRowFull` kontrollerinin sirasi TERS CEVRILDIGINDE tum suite yesil
+   * geciyordu. Sebep, yukaridaki testin satirinin BOS olmasi -- `isRowFull`
+   * her iki sirada da `false` donuyor, yani sira hic devreye girmiyor.
+   * Docblock "bu sirayi DOGRUDAN pinler" diyordu; pinlemiyordu.
+   *
+   * Sirayi gorunur kilmak icin IKI KOSULUN DA dogru oldugu bir durum
+   * gerekiyor: skor hedefte VE hamle satiri dolduruyor. Bu durum normal
+   * oyunda ulasilamaz (puan getiren her hamle en az 3 slot bosaltir --
+   * bir sonraki test bunu ispatliyor), o yuzden BILEREK kuruluyor.
+   * Ulasilamaz olmasi kuralin gereksiz oldugunu degil, testinin elle
+   * kurulmasi gerektigini gosterir.
+   */
+  it('hedefe ulastiran hamle tahtayi doldursa bile oyuncu KAZANIR', () => {
+    const store = makeStore();
+    store.getState().startLevel(1, 1);
+    const { config, pool } = store.getState();
+
+    // Eslesme URETMEYEN dolu-bir-eksik satir: iki tipi donusumlu diz.
+    // SLOT DIZISI SABIT UZUNLUKTADIR: son slot `null` olmali, yoksa
+    // `isRowFull` diziyi zaten dolu sayar (ilk yazimda tam bu oldu).
+    const a = pool[0]!;
+    const b = pool[1]!;
+    const row: SlotRowModel = [
+      ...Array.from({ length: config.slotCount - 1 }, (_, i) => createTile(i % 2 === 0 ? a : b)),
+      null,
+    ];
+
+    store.setState({
+      row,
+      tray: [createTile(a)],
+      selectedTrayIndex: null,
+      score: config.targetScore,
+    });
+    store.getState().selectTray(0);
+    store.getState().insertAt(0);
+
+    const state = store.getState();
+
+    // Kurulumun GERCEKTEN iki kosulu birden sagladigini once ISPATLA --
+    // yoksa bu test de bir oncekiyle ayni vakuma duser.
+    expect(isRowFull(state.row)).toBe(true);
+    expect(state.score).toBeGreaterThanOrEqual(config.targetScore);
+
+    // Asil iddia: sira dogruysa 'seviye-tamam', ters ise 'oyun-bitti'.
+    expect(state.status).toBe('seviye-tamam');
   });
 
   /**
@@ -452,5 +518,90 @@ describe('combo takibi', () => {
       expect(store.getState().bestCombo).toBeGreaterThanOrEqual(peak);
       peak = store.getState().bestCombo;
     }
+  });
+});
+
+/**
+ * `lastGain` ve `clearCombo` -- ikisi de Sprint 2 kalite kapisinda eklendi.
+ *
+ * `lastGain`: ekran "eslesme oldu mu" sorusunu render closure'indaki bayat
+ * `state.score` ile `getState().score`'u karsilastirarak cevapliyordu; hizli
+ * cift dokunusta hamle yapilmadigi halde "basari" haptigi veriyordu.
+ * Turetmeyi store yapiyor, ekran yalnizca okuyor.
+ */
+describe('lastGain', () => {
+  it('puansiz hamlede sifirdir', () => {
+    const store = makeStore();
+    store.getState().startLevel(1, 3);
+    store.getState().selectTray(0);
+    store.getState().insertAt(0);
+
+    expect(store.getState().lastGain).toBe(0);
+  });
+
+  it('eslesmede kazanilan puana esittir', () => {
+    const store = makeStore();
+    store.getState().startLevel(1, 3);
+
+    let scored = false;
+    for (let i = 0; i < 60 && !scored; i++) {
+      const state = store.getState();
+      if (state.status !== 'oynaniyor') break;
+
+      const before = state.score;
+      const move = findScoringMove(state);
+      if (move === null) {
+        const positions = insertPositions(state.row);
+        if (positions.length === 0) break;
+        store.getState().selectTray(0);
+        store.getState().insertAt(positions[0]!);
+        continue;
+      }
+      store.getState().selectTray(move.tray);
+      store.getState().insertAt(move.position);
+      expect(store.getState().lastGain).toBe(store.getState().score - before);
+      scored = true;
+    }
+
+    // Denetimin YAPILDIGINI iddia et -- dongu hic puanlamasaydi test bos gecerdi.
+    expect(scored).toBe(true);
+  });
+});
+
+describe('clearCombo', () => {
+  /**
+   * `ANIM.COMBO_BANNER_MS` "ekranda kalma suresi" diye belgelenmisti ama
+   * hicbir zamanlayici yoktu: banner bir sonraki hamleye kadar duruyordu --
+   * ustelik `pointerEvents` de olmadigi icin o hamlenin dokunusunu
+   * bloklayarak. Ekran bu eylemi sure sonunda cagirir.
+   */
+  it('banner carpanini sifirlar', () => {
+    const store = makeStore();
+    store.getState().startLevel(1, 1);
+    store.setState({ lastCombo: 3 });
+
+    store.getState().clearCombo();
+    expect(store.getState().lastCombo).toBe(0);
+  });
+
+  it('zaten sifirken durumu degistirmez', () => {
+    const store = makeStore();
+    store.getState().startLevel(1, 1);
+    const before = store.getState();
+
+    store.getState().clearCombo();
+
+    // Ayni REFERANS: gereksiz `set` cagrisi React'te bos render tetiklerdi.
+    expect(store.getState()).toBe(before);
+  });
+
+  /** `bestCombo` kalici -- banner gizlenince seviye rekoru silinmemeli. */
+  it('bestCombo yu korur', () => {
+    const store = makeStore();
+    store.getState().startLevel(1, 1);
+    store.setState({ lastCombo: 2, bestCombo: 2 });
+
+    store.getState().clearCombo();
+    expect(store.getState().bestCombo).toBe(2);
   });
 });
