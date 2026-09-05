@@ -78,6 +78,38 @@ function assertNonEmptyPool(p: readonly TileId[]): asserts p is NonEmptyPool { .
 - **`SAFETY_THRESHOLD` tek taşıyıcı sabittir.** Kapatılırsa kusursuz oyuncu bile %100 kaybediyor.
 - Denge sabitleri tahminle değil **ölçümle** seçildi. Değiştirmeden önce simüle et: `src/game/core/__tests__/helpers/policies.ts` içindeki `playGame` + politikalar hazır.
 
+## Sprint 2'de öğrenilenler
+
+### Reanimated 4 Jest'te resolver ister
+
+`react-native-worklets` JSI'ya erişiyor ve testte `Cannot read properties of undefined (reading 'loadUnpackers')` ile patlıyor. Paketin çözümü `react-native-worklets/jest/resolver.js`, ama **doğrudan kullanılamaz**: jest-expo zaten `@react-native/jest-preset/jest/resolver` kuruyor ve Jest tek bir `resolver` kabul ediyor. [jest.resolver.js](jest.resolver.js) ikisini birleştirir.
+
+### Erişilebilirlik kanalını font desteğine emanet etme
+
+Form işaretlerini `⬢ ★ ☾` gibi metin sembolleriyle çizmek cazip. Ama Android'de bir glif eksikse tofu kutusu çıkar ve **renk körlüğü kanalının tamamı kaybolur**. Her form düz `View` ile çiziliyor (borderRadius / transform / üçgen kenarlık hilesi).
+
+### Yerleşimi test edilebilir yap
+
+`computeTileSize` bileşen içinde inline hesaplanabilirdi. Ayrı dosyada olduğu için ilk testte **satırın hiçbir telefona sığmadığı** ortaya çıktı (320pt ekranda 352pt). Sebep: ekleme göstergeleri layout genişliği tüketiyordu. Mutlak konumlandırmaya geçildi. Bu, cihazda görülene kadar fark edilmezdi.
+
+### Store'u `setState` ile değiştirince test render etmez
+
+`useGameStore.setState(...)` React olayı dışında olduğu için bileşen güncellenmez. RNTL'in `act`'ı ile sar:
+
+```ts
+await act(async () => {
+  useGameStore.setState({ status: 'oyun-bitti' });
+});
+```
+
+### Platform kontrolünü modül sabitine koyma
+
+`const SUPPORTED = Platform.OS === 'ios'` yazarsan testte platformu değiştiremezsin ve test "fonksiyon var mı" demekten öteye gidemez. Çağrı anında oku (`isSupported()`) — maliyeti bir özellik erişimi, karşılığı gerçek bir test.
+
+### Renk metriği: lineer RGB değil CIELAB
+
+Lineer RGB'de Euclid mesafesi karanlık uçta sıkışır; iki koyu renk algısal olarak rahat ayrılsa bile küçük değer verir. Palet ölçümünde tam bu yaşandı — `kahve/nazar/cay` üçlüsü "çok yakın" görünüyordu, CIELAB'da 20+ ΔE ile ayrıktılar. **Yanlış olan palet değil metrikti.**
+
 ## Bu projede yanan tuzaklar (tekrar düşme)
 
 ### RNTL v14: `render` ve `fireEvent` **async**

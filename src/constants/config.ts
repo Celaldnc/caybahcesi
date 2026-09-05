@@ -257,3 +257,61 @@ export const TILE_WEIGHT = {
   /** "Ozel" nesneler (vapur, kayik, balik). */
   RARE: 3,
 } as const;
+
+/**
+ * Tile gorsel olculeri.
+ *
+ * Tile GENISLIGI calisma zamaninda hesaplanir (ekran genisligi / slot sayisi),
+ * cunku slot sayisi seviyeye gore 7-9 arasi degisir. Buradakiler oranlar ve
+ * degismezler.
+ */
+export const TILE_UI = {
+  /** Tile'in en fazla genisligi (genis ekranlarda buyuyup sismesin). */
+  MAX_SIZE: 56,
+  /**
+   * Tile'in en az genisligi.
+   *
+   * 24 OLCUMLE secildi: 9 slot, 320pt ekran (iPhone SE) ve 24pt kenar
+   * boslugu ile kullanilabilir genislik 272pt. 9 tile + 8 bosluk =
+   * 9t + 32 <= 272 -> t <= 26. Taban 28 iken satir TASIYORDU; layout
+   * testi bunu yakaladi.
+   *
+   * Gorsel olarak kucuk ama dokunma alani sorun degil: TilePreview
+   * hitSlop ile hedefi TOUCH.MIN_TARGET'a tamamliyor.
+   */
+  MIN_SIZE: 24,
+  /** Tile'lar arasi bosluk. */
+  GAP: 4,
+  /** Kose yuvarlakligi, tile boyutunun orani. */
+  RADIUS_RATIO: 0.22,
+  /** Form isaretinin tile icindeki orani. */
+  SHAPE_RATIO: 0.62,
+  /** Glif (emoji) yazi boyutunun tile boyutuna orani. */
+  GLYPH_RATIO: 0.44,
+  /** Secili tile'in buyume orani. */
+  SELECTED_SCALE: 1.12,
+} as const;
+
+/**
+ * Ekleme konumu gostergesi (tile'lar arasindaki cizgiler).
+ *
+ * IKI SORUN, IKI COZUM:
+ *
+ * 1. LAYOUT GENISLIGI: gostergeler satirda yer kaplarsa 9 slotlu seviye
+ *    hicbir telefona sigmaz -- olculdu, 320pt ekranda satir 352pt oluyordu.
+ *    Cozum: gostergeler MUTLAK konumlandirilir, layout genisligi tuketmez.
+ *
+ * 2. DOKUNMA HEDEFI: gorsel cizgi 4-6 birim genisliginde, oysa iOS HIG 44pt
+ *    / Material 48dp ister. Cozum: `hitSlop` ile dokunma alani genisletilir.
+ *
+ * Not: komsu ekleme noktalarinin dokunma alanlari, tile genisligi
+ * 2*TOUCH_PADDING'den kucukse ortusur. Bu kabul edilebilir -- ortusen
+ * bolgede uste cizilen kazanir ve iki konum da "ayni bolgeye ekle"
+ * anlamina gelir. Ekran okuyucu kullanicisi zaten etiketten secer.
+ */
+export const INSERT_UI = {
+  /** Gorunen gosterge genisligi. */
+  WIDTH: 4,
+  /** hitSlop ile her iki yana eklenen dokunma payi. */
+  TOUCH_PADDING: 14,
+} as const;

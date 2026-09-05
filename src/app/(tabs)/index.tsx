@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import type { ReactElement } from 'react';
 import { StyleSheet } from 'react-native';
 
@@ -7,8 +8,8 @@ import { Text } from '@/components/Themed';
 import { LEVEL, OPACITY, SLOTS, SPACING, TYPO, WEIGHT } from '@/constants/config';
 
 /**
- * Ana ekran -- Sprint 0 iskeleti.
- * TODO(sprint-2): burasi SlotRow + TilePicker'i barindiran gercek oyun ekranina donusecek.
+ * Ana ekran.
+ * TODO(sprint-3): kayitli ilerlemeden "devam et", gunluk bulmaca girisi.
  */
 export default function HomeScreen(): ReactElement {
   return (
@@ -27,13 +28,8 @@ export default function HomeScreen(): ReactElement {
 
       <Button
         label="Oyna"
-        // Sprint 0'da oyun ekrani henuz yok. Butonu etkin birakip hicbir sey
-        // yapmamak, ekran okuyucu kullanicisina yerine getirilmeyen bir vaat verir.
-        disabled
-        accessibilityHint="Oyun ekranı Sprint 2’de açılacak"
-        onPress={() => {
-          // TODO(sprint-2): router.push('/game/1')
-        }}
+        accessibilityHint="Birinci seviyeden oyunu başlatır"
+        onPress={() => router.push('/game/1')}
         style={styles.playButton}
       />
     </Screen>
