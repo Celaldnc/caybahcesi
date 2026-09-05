@@ -36,6 +36,10 @@ const asThreshold = (pct) => ({
 module.exports = {
   preset: 'jest-expo',
 
+  // Reanimated 4 / react-native-worklets Jest'te cozulebilsin diye
+  // (bkz. jest.resolver.js -- jest-expo'nun resolver'i ile birlestirir).
+  resolver: '<rootDir>/jest.resolver.js',
+
   moduleNameMapper,
 
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],

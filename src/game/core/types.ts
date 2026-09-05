@@ -34,9 +34,15 @@ export type TileFamily =
  * (Olculdu: 15.000 havuzda 0 cakisma.) Alternatifler denendi ve yetersiz:
  * form-farkindali acgozlu secim cakismayi ancak %83.8'e indiriyor;
  * geri izlemeli secim 8748 olasi havuzu 15'e dusurup cesitliligi olduruyor.
+ *
+ * FORMLAR NEDEN BUNLAR: hepsi duz `View` ile (borderRadius / transform /
+ * kenarlik hilesi) cizilebilir. Metin sembolu (⬢, ★, ☾ ...) kullanmak
+ * cazipti ama font destegine bagimli: Android'de tofu kutusu cikarsa renk
+ * korlugu kanalinin TAMAMI kaybolur. Erisilebilirligin tek tasiyicisini
+ * font kapsamina emanet etmiyoruz.
  */
 export type TileShape =
-  'daire' | 'kare' | 'ucgen' | 'elmas' | 'yildiz' | 'altigen' | 'kalp' | 'hilal' | 'damla';
+  'daire' | 'kare' | 'elmas' | 'ucgen' | 'ters-ucgen' | 'yuvarlak' | 'cubuk' | 'halka' | 'capraz';
 
 /**
  * Aile ICI ayrim icin ikinci, forma DIK kanal.

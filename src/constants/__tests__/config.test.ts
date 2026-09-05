@@ -1,5 +1,6 @@
 import {
   ICON,
+  INSERT_UI,
   LEVEL,
   MATCH,
   OPACITY,
@@ -8,6 +9,7 @@ import {
   SLOTS,
   SPACING,
   STORAGE_KEYS,
+  TILE_UI,
   TOUCH,
   TRAY,
   TYPO,
@@ -165,6 +167,55 @@ describe('config invariant sozlesmeleri', () => {
         expect(Number(value)).toBeGreaterThanOrEqual(100);
         expect(Number(value)).toBeLessThanOrEqual(900);
       }
+    });
+  });
+
+  /**
+   * EKLEME GOSTERGESI -- iliskiler, sayilar degil.
+   *
+   * Sprint 2 kalite kapisinda uc ajan birbirinden bagimsiz ayni seyi buldu:
+   * `TOUCH_PADDING` 14 yazilmisti, gercek dokunma hedefi 4 + 2*14 = 32pt
+   * oluyordu; config yorumu ise HIG 44 / Material 48 esiginin saglandigini
+   * IDDIA EDIYORDU. Sayiyi config'e koymak yetmiyor -- iliskiyi de koymak
+   * gerekiyor, yoksa yorum bir sey soyler aritmetik baskasini.
+   */
+  describe('INSERT_UI', () => {
+    it('dokunma hedefi TOUCH.MIN_TARGET esigini karsilar', () => {
+      const target = INSERT_UI.WIDTH + 2 * INSERT_UI.TOUCH_PADDING;
+      expect(target).toBeGreaterThanOrEqual(TOUCH.MIN_TARGET);
+    });
+
+    /**
+     * Gosterge bosluklarin TAM ORTASINA konumlaniyor:
+     *   left = GAP + i*step - GAP/2 - WIDTH/2
+     * `position = 0` icin bu `(GAP - WIDTH)/2` demek. WIDTH > GAP olursa
+     * deger NEGATIFE duser ve kenardaki gostergeler kapsayicinin disina
+     * tasar. Sprint 2'de bu bagimlilik yalnizca TESADUFEN saglaniyordu
+     * (4 === 4) -- ne belgeliydi ne test edilmisti.
+     */
+    it('gosterge genisligi tile araligini asmaz', () => {
+      expect(INSERT_UI.WIDTH).toBeLessThanOrEqual(TILE_UI.GAP);
+    });
+
+    it('gosterge yuksekligi tile icinde kalir', () => {
+      expect(INSERT_UI.HEIGHT_RATIO).toBeGreaterThan(0);
+      expect(INSERT_UI.HEIGHT_RATIO).toBeLessThanOrEqual(1);
+    });
+  });
+
+  /**
+   * TILE dokunma hedefi de ayni sozlesmeye tabi. `TilePreview` hitSlop'u
+   * `(MIN_TARGET - size)/2` ile tamamliyor; en KUCUK tile'da bile esik
+   * saglanmali, yoksa 9 slotlu dar ekranda tile'lar dokunulamaz olur.
+   */
+  describe('TILE_UI', () => {
+    it('en kucuk tile hitSlop ile dokunma esigine tamamlanabilir', () => {
+      const slop = Math.max(0, (TOUCH.MIN_TARGET - TILE_UI.MIN_SIZE) / 2);
+      expect(TILE_UI.MIN_SIZE + 2 * slop).toBeGreaterThanOrEqual(TOUCH.MIN_TARGET);
+    });
+
+    it('MIN_SIZE MAX_SIZE i asmaz', () => {
+      expect(TILE_UI.MIN_SIZE).toBeLessThan(TILE_UI.MAX_SIZE);
     });
   });
 });

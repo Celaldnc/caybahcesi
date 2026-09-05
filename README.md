@@ -71,6 +71,9 @@ src/
 │   ├── +not-found.tsx
 │   └── (tabs)/           # index (oyun) + settings
 ├── game/
+│   ├── engine/           # Bileşenler: SlotRow, TilePicker, TilePreview, ShapeMark
+│   ├── store/            # Zustand oyun durumu
+│   ├── data/             # Tile renkleri (renk körlüğü ölçümlü)
 │   ├── core/             # ⚠ SAF TypeScript — platform API import ETMEZ
 │   │   ├── types.ts      # Tile/Slot/SlotRow/LevelConfig veri modeli
 │   │   ├── rng.ts        # Tohumlu rastgelelik (Daily mod + test determinizmi)
@@ -127,6 +130,20 @@ Bu, ölçüme dayalı bir karardı. İlk uygulama "sabit slot + her eşleşmeden
 
 Zincir açgözlü oyunda nadirdir; grubu bilerek bölen oyuncunun ödülüdür — beceri tavanı.
 
+### Erişilebilirlik: üç bağımsız kanal
+
+Her tile bilgiyi üç kanalda taşır ve üçü de bağımsızdır:
+
+| Kanal    | Taşıdığı     | Garanti                                                                                  |
+| -------- | ------------ | ---------------------------------------------------------------------------------------- |
+| **Renk** | Aile kimliği | 36 aile çiftinin tamamı protanopi/döteranopi/tritanopi altında ΔE ≥ 10 (CIELAB, ölçümlü) |
+| **Form** | Aile kimliği | 9 aile ↔ 9 form bijeksiyonu → havuzdaki her tile farklı formda (**matematiksel**)        |
+| **Ad**   | Tile kimliği | Türkçe `nameTr`, ekran okuyucu etiketi                                                   |
+
+Formlar düz `View` ile çizilir — metin sembolü kullanılsaydı Android'de eksik glif tofu kutusuna dönüşür ve kanal tamamen kaybolurdu.
+
+Etkileşim **tap-tap**: önce tray'den seç, sonra satırdaki konuma dokun. Sürüklemek daha akıcı görünürdü ama ekran okuyucu kullanıcısı sürükleyemez; iki kullanıcıya da aynı yol veriliyor. Ekleme konumları `hitSlop` ile 48dp dokunma hedefine tamamlanır.
+
 ### No-stuck-state garantisi
 
 Spec'in "tüh, mahsur kaldım durumu oluşturma" maddesi somut bir sözleşmeye çevrildi: boş slot sayısı `SAFETY_THRESHOLD`'a düştüğünde tray, ya üçlü tamamlayan ya da bitişik çift kuran bir tile **içermek zorunda**.
@@ -177,7 +194,7 @@ Yani **üretici adil, kayıp oyuncunun yerleştirme hatasından gelir.** Bir _so
 
 - [x] **Sprint 0** — İskelet, TS strict, ESLint/Prettier, Jest, Husky, CI, multi-agent kalite kapısı
 - [x] **Sprint 1** — Core mantık (tiles, generator, matcher, level, score) TDD ile
-- [ ] **Sprint 2** — Render + gesture (SlotRow, TilePicker, animasyonlar)
+- [x] **Sprint 2** — Render + gesture (SlotRow, TilePicker, animasyonlar, store)
 - [ ] **Sprint 3** — Kalıcılık, ses, 30 seviye, ayarlar
 - [ ] **Sprint 4** — EAS build, mağaza yayını
 

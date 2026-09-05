@@ -1,8 +1,15 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { LEVEL, SLOTS } from '@/constants/config';
 
 import HomeScreen from '../index';
+
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({
+  router: {
+    push: (path: string) => mockPush(path),
+  },
+}));
 
 describe('HomeScreen', () => {
   it('oyun basligini gosterir', async () => {
@@ -26,18 +33,24 @@ describe('HomeScreen', () => {
     expect(screen.getByLabelText(`${SLOTS.INITIAL} slot, ${LEVEL.TOTAL} seviye`)).toBeOnTheScreen();
   });
 
-  it('Oyna butonu Sprint 0 da devre disidir (yerine getirilmeyen vaat verilmez)', async () => {
+  it('Oyna butonu etkindir', async () => {
     await render(<HomeScreen />);
     const button = screen.getByRole('button', { name: 'Oyna' });
     expect(button).toBeOnTheScreen();
-    expect(button).toBeDisabled();
+    expect(button).not.toBeDisabled();
   });
 
-  it('Oyna butonunun ipucu durumu dogru anlatir', async () => {
+  it('Oyna butonu ilk seviyeye yonlendirir', async () => {
+    await render(<HomeScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Oyna' }));
+    expect(mockPush).toHaveBeenCalledWith('/game/1');
+  });
+
+  it('Oyna butonunun ipucu ne yapacagini anlatir', async () => {
     await render(<HomeScreen />);
     expect(screen.getByRole('button', { name: 'Oyna' })).toHaveProp(
       'accessibilityHint',
-      'Oyun ekranı Sprint 2’de açılacak',
+      'Birinci seviyeden oyunu başlatır',
     );
   });
 });
