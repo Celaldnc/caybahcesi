@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Dimensions, StyleSheet, type ViewStyle } from 'react-native';
 
-import { ANIM, LEVEL, SPACING } from '@/constants/config';
+import { ANIM, LEVEL, ORDER, SPACING } from '@/constants/config';
 import { thoughtfulPolicy } from '@/game/core/__tests__/helpers/policies';
 import { insertTile, resolve } from '@/game/core/matcher';
+import { neededTileIds } from '@/game/core/orders';
 import { createTile } from '@/game/core/tiles';
 import { computeTileSize } from '@/game/engine/layout';
 import type { SlotRow as SlotRowModel, TileId } from '@/game/core/types';
@@ -145,7 +146,7 @@ describe('GameScreen', () => {
     const config = useGameStore.getState().config;
 
     expect(screen.getByLabelText('Skor 0')).toBeOnTheScreen();
-    expect(screen.getByText(new RegExp(`Hedef ${config.targetScore}`))).toBeOnTheScreen();
+    expect(screen.getByText(new RegExp(`Servis 0/${config.customerCount}`))).toBeOnTheScreen();
   });
 
   it('baslangicta oyuncuya tile secmesini soyler', async () => {
@@ -378,15 +379,15 @@ describe('GameScreen', () => {
    */
   describe('ilerleme gostergesi', () => {
     /** Mutasyon: yuzde sabit 0 yapildiginda hicbir test kirilmiyordu. */
-    it('yuzde skora gore hesaplanir', async () => {
+    it('yuzde servis edilen musteriye gore hesaplanir', async () => {
       await render(<GameScreen />);
-      const target = useGameStore.getState().config.targetScore;
+      const total = useGameStore.getState().config.customerCount;
 
       await act(async () => {
-        useGameStore.setState({ score: Math.round(target / 2) });
+        useGameStore.setState({ served: total });
       });
 
-      expect(screen.getByText(new RegExp(`Hedef ${target} · 50%`))).toBeOnTheScreen();
+      expect(screen.getByText(new RegExp(`Servis ${total}/${total} · 100%`))).toBeOnTheScreen();
     });
   });
 
@@ -471,10 +472,17 @@ describe('GameScreen', () => {
     it('oyun bitince sebebini duyurur', async () => {
       await render(<GameScreen />);
       await act(async () => {
-        useGameStore.setState({ status: 'oyun-bitti', moves: 9, score: 40 });
+        useGameStore.setState({
+          status: 'oyun-bitti',
+          moves: 9,
+          score: 40,
+          lossReason: 'musteri-bitti',
+        });
       });
 
-      expect(mockAnnounce).toHaveBeenCalledWith('Satır doldu, oyun bitti. 40 puan.');
+      expect(mockAnnounce).toHaveBeenCalledWith(
+        'Çok fazla müşteri gitti. Çay bahçesi kapandı, 40 puan.',
+      );
     });
   });
 
@@ -570,6 +578,93 @@ describe('GameScreen', () => {
       await fireEvent.press(tile);
 
       expect(mockHaptic).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * SEMAVER -- ajans katmani.
+   *
+   * Sprint 3a olcumu: siparis sistemi baski getirdi ama oyuncu hangi
+   * ailenin eslesecegine karar veremiyordu. Semaver o karari verir; bu
+   * testler akisi (sec -> kur -> masa) pinler.
+   */
+  describe('semaver', () => {
+    it('tile secilmeden kurulamaz', async () => {
+      await render(<GameScreen />);
+      expect(screen.getByTestId('semaver')).toBeDisabled();
+    });
+
+    it('tile secilince kurulabilir hale gelir', async () => {
+      await render(<GameScreen />);
+      await fireEvent.press(screen.getByTestId('tepsi-tile-0'));
+      expect(screen.getByTestId('semaver')).not.toBeDisabled();
+    });
+
+    it('kalan sarji etiketinde gosterir', async () => {
+      await render(<GameScreen />);
+      const charges = useGameStore.getState().powers.semaver;
+      expect(screen.getByLabelText(`Semaver, ${charges} hak`)).toBeOnTheScreen();
+    });
+
+    /** Kurulu degilken masalar buton DEGIL: bos vaat verilmez. */
+    it('kurulmadan masalar basilamaz', async () => {
+      await render(<GameScreen />);
+      await fireEvent.press(screen.getByTestId('tepsi-tile-0'));
+      expect(screen.getByTestId('masa-0')).toBeTruthy();
+      expect(screen.queryByHintText('Seçili tile bu masanın istediği tipe dönüşür')).toBeNull();
+    });
+
+    it('kurulunca ipucu degisir ve masalar hedef olur', async () => {
+      await render(<GameScreen />);
+      await fireEvent.press(screen.getByTestId('tepsi-tile-0'));
+      await fireEvent.press(screen.getByTestId('semaver'));
+
+      expect(screen.getByText('Hangi masaya çevirelim?')).toBeOnTheScreen();
+      // Uc masanin UCU DE hedef olur -- oyuncu hangisini kurtaracagini secer.
+      expect(screen.getAllByHintText('Seçili tile bu masanın istediği tipe dönüşür')).toHaveLength(
+        ORDER.TABLES,
+      );
+    });
+
+    it('masaya basilinca tile o masanin istedigi tipe doner', async () => {
+      await render(<GameScreen />);
+
+      const target = neededTileIds(useGameStore.getState().customers[0]!.order)[0]!;
+      await fireEvent.press(screen.getByTestId('tepsi-tile-0'));
+      await fireEvent.press(screen.getByTestId('semaver'));
+      await fireEvent.press(screen.getByTestId('masa-0'));
+
+      expect(useGameStore.getState().tray[0]!.id).toBe(target);
+    });
+
+    it('kullanildiktan sonra sarj duser ve kurulum kalkar', async () => {
+      await render(<GameScreen />);
+      const before = useGameStore.getState().powers.semaver;
+
+      await fireEvent.press(screen.getByTestId('tepsi-tile-0'));
+      await fireEvent.press(screen.getByTestId('semaver'));
+      await fireEvent.press(screen.getByTestId('masa-0'));
+
+      expect(useGameStore.getState().powers.semaver).toBe(before - 1);
+      expect(screen.getByText('Bir tile seç')).toBeOnTheScreen();
+    });
+
+    it('tekrar basmak kurulumu iptal eder', async () => {
+      await render(<GameScreen />);
+      await fireEvent.press(screen.getByTestId('tepsi-tile-0'));
+      await fireEvent.press(screen.getByTestId('semaver'));
+      await fireEvent.press(screen.getByTestId('semaver'));
+
+      expect(screen.getByText('Şimdi satırda bir konuma dokun')).toBeOnTheScreen();
+    });
+  });
+
+  describe('masalar', () => {
+    it('uc masayi ekranda gosterir', async () => {
+      await render(<GameScreen />);
+      for (let i = 0; i < ORDER.TABLES; i++) {
+        expect(screen.getByTestId(`masa-${i}`)).toBeTruthy();
+      }
     });
   });
 

@@ -120,31 +120,6 @@ export const LEVEL = {
 
   /** Kac levelde bir slot sayisi artar (7 -> 8 -> 9). */
   LEVELS_PER_SLOT_INCREASE: 10,
-
-  /**
-   * Level 1'in hedef skoru.
-   *
-   * PERFECT_SORT_BONUS 25'e ve SAFETY_THRESHOLD 5'e gore YENIDEN TURETILDI.
-   * Onceki 120 degeri, bonusun 50 oldugu (ve skorun %70'ini urettigi) bir
-   * dunyada olculmustu; o dunyada level 1 medyan 13.5 saniyede bitiyordu --
-   * spec'in 30-90 sn hedef bandinin yarisi kadar.
-   *
-   * Yeni set (bonus 25 / safety 5 / taban 190 / adim 4) ile olculen sonuc:
-   *   lvl  1  p50 31.5 sn   lvl 10  p50 36.0 sn
-   *   lvl 20  p50 58.5 sn   lvl 30  p50 87.0 sn
-   * 30 seviyenin 30'u da p50 olarak 30-90 sn bandinda (onceki set: 20/30).
-   */
-  BASE_TARGET_SCORE: 190,
-
-  /**
-   * Her levelde hedef skorun artisi.
-   *
-   * Bilerek KUCUK: asil zorluk hedefin yukselmesinden degil, puan HIZININ
-   * dusmesinden geliyor. Olculdu: 9 slot + 9 tip yapilandirmasinda hiz
-   * hamle basina ~4 puana iniyor, yani ayni hedef cok daha uzun suruyor.
-   * Buyuk bir artis, son seviyeleri dakikalarca surecek hale getirirdi.
-   */
-  TARGET_SCORE_STEP: 4,
 } as const;
 
 /**

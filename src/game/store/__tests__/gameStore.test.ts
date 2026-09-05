@@ -1,3 +1,5 @@
+import { ORDER } from '@/constants/config';
+
 import { getLevelConfig } from '@/game/core/level';
 import {
   countEmpty,
@@ -9,7 +11,6 @@ import {
 } from '@/game/core/matcher';
 import { dailySeed } from '@/game/core/rng';
 import { createTile } from '@/game/core/tiles';
-import type { SlotRow as SlotRowModel } from '@/game/core/types';
 
 import { createGameStore, type GameStore } from '../gameStore';
 
@@ -316,12 +317,12 @@ describe('insertAt', () => {
 });
 
 describe('gecis kurallari', () => {
-  it('skor hedefe ulasinca seviye tamamlanir', () => {
+  it('yeterli musteri servis edilince seviye tamamlanir', () => {
     const store = makeStore();
     store.getState().startLevel(1, 1);
-    const config = store.getState().config;
+    const { config } = store.getState();
 
-    store.setState({ score: config.targetScore });
+    store.setState({ served: config.customerCount });
     store.getState().selectTray(0);
     store.getState().insertAt(0);
 
@@ -329,88 +330,85 @@ describe('gecis kurallari', () => {
   });
 
   /**
-   * SIRA TESTI -- yukaridaki test bunu YAPMIYORDU.
+   * SIRA TESTI: once "seviye tamam mi", sonra "kaybettik mi".
    *
-   * Sprint 2 kalite kapisi mutasyonla yakaladi: `isLevelComplete` ile
-   * `isRowFull` kontrollerinin sirasi TERS CEVRILDIGINDE tum suite yesil
-   * geciyordu. Sebep, yukaridaki testin satirinin BOS olmasi -- `isRowFull`
-   * her iki sirada da `false` donuyor, yani sira hic devreye girmiyor.
-   * Docblock "bu sirayi DOGRUDAN pinler" diyordu; pinlemiyordu.
-   *
-   * Sirayi gorunur kilmak icin IKI KOSULUN DA dogru oldugu bir durum
-   * gerekiyor: skor hedefte VE hamle satiri dolduruyor. Bu durum normal
-   * oyunda ulasilamaz (puan getiren her hamle en az 3 slot bosaltir --
-   * bir sonraki test bunu ispatliyor), o yuzden BILEREK kuruluyor.
-   * Ulasilamaz olmasi kuralin gereksiz oldugunu degil, testinin elle
-   * kurulmasi gerektigini gosterir.
+   * Sprint 3'te bu kural DAHA KRITIK hale geldi. Eskiden cakisma yapisal
+   * olarak imkansizdi (puan getiren her hamle en az 3 slot bosaltir), ama
+   * siparis sistemi ikinci bir kaybetme yolu getirdi: SABIR. Artik ayni
+   * hamlede son musteri servis edilirken baska bir masanin sabri
+   * tukenebilir. Ters sirada yazilsaydi oyuncu kazandigi hamlede
+   * kaybederdi -- en can sikici hata turu.
    */
-  it('hedefe ulastiran hamle tahtayi doldursa bile oyuncu KAZANIR', () => {
+  it('kazandiran hamlede baska masa gitse bile oyuncu KAZANIR', () => {
     const store = makeStore();
     store.getState().startLevel(1, 1);
     const { config, pool } = store.getState();
-
-    // Eslesme URETMEYEN dolu-bir-eksik satir: iki tipi donusumlu diz.
-    // SLOT DIZISI SABIT UZUNLUKTADIR: son slot `null` olmali, yoksa
-    // `isRowFull` diziyi zaten dolu sayar (ilk yazimda tam bu oldu).
     const a = pool[0]!;
-    const b = pool[1]!;
-    const row: SlotRowModel = [
-      ...Array.from({ length: config.slotCount - 1 }, (_, i) => createTile(i % 2 === 0 ? a : b)),
-      null,
-    ];
 
+    // Kurulum: bir masa bu hamlede TAMAMLANACAK (son gereken musteri),
+    // diger iki masanin sabri ayni hamlede TUKENECEK.
     store.setState({
-      row,
+      served: config.customerCount - 1,
+      lost: ORDER.MAX_LOST - 2,
+      customers: [
+        {
+          id: 'servis',
+          order: [{ tileId: a, required: 1, served: 0 }],
+          patience: 5,
+          maxPatience: 5,
+        },
+        {
+          id: 'giden1',
+          order: [{ tileId: a, required: 9, served: 0 }],
+          patience: 1,
+          maxPatience: 9,
+        },
+        {
+          id: 'giden2',
+          order: [{ tileId: a, required: 9, served: 0 }],
+          patience: 1,
+          maxPatience: 9,
+        },
+      ],
+      row: [createTile(a), createTile(a), ...Array<null>(config.slotCount - 2).fill(null)],
       tray: [createTile(a)],
       selectedTrayIndex: null,
-      score: config.targetScore,
     });
+
+    // Ucluyu tamamla: masalardan biri servis edilecek, digerlerinin sabri bitecek.
     store.getState().selectTray(0);
     store.getState().insertAt(0);
 
     const state = store.getState();
 
-    // Kurulumun GERCEKTEN iki kosulu birden sagladigini once ISPATLA --
-    // yoksa bu test de bir oncekiyle ayni vakuma duser.
-    expect(isRowFull(state.row)).toBe(true);
-    expect(state.score).toBeGreaterThanOrEqual(config.targetScore);
+    // Kurulumun GERCEKTEN cakismayi urettigini once ISPATLA -- yoksa bu
+    // test de vakuma duser (CLAUDE.md).
+    expect(state.served).toBeGreaterThanOrEqual(config.customerCount);
+    expect(state.lost).toBeGreaterThan(ORDER.MAX_LOST - 2);
 
-    // Asil iddia: sira dogruysa 'seviye-tamam', ters ise 'oyun-bitti'.
     expect(state.status).toBe('seviye-tamam');
   });
 
-  /**
-   * INVARYANT: bir hamle ayni anda hem seviyeyi bitirip hem oyunu
-   * kaybettiremez -- yapisal olarak imkansiz.
-   *
-   * Kanit: puan ancak eslesmeden gelir, eslesme en az MATCH.LENGTH tile
-   * kaldirir, dolayisiyla puan getiren her hamle en az 3 slot bosaltir.
-   * Puan getirmeyen hamle ise skoru degistirmez, yani hedefe ulastiramaz.
-   *
-   * Bu testi yazarken ilk denemem CAKISMAYI KURAMADI -- cunku kurulamiyor.
-   * Dogru olan, imkansizligi iddia etmek.
-   */
-  it('hicbir hamle ayni anda hem kazandirip hem kaybettiremez', () => {
-    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-      const store = makeStore();
-      store.getState().startLevel(1, seed);
+  /** Kayip esigi asilinca (ve kazanilmadiysa) oyun biter. */
+  it('cok musteri kaybedilince oyun biter', () => {
+    const store = makeStore();
+    store.getState().startLevel(1, 1);
+    const { pool, customers } = store.getState();
+    const a = pool[0]!;
 
-      for (let move = 0; move < 200; move++) {
-        const state = store.getState();
-        if (state.status !== 'oynaniyor') break;
+    store.setState({
+      lost: ORDER.MAX_LOST - 1,
+      customers: customers.map((customer) => ({ ...customer, patience: 1 })),
+      tray: [createTile(a)],
+      selectedTrayIndex: null,
+    });
 
-        const positions = insertPositions(state.row);
-        if (positions.length === 0) break;
+    store.getState().selectTray(0);
+    store.getState().insertAt(0);
 
-        state.selectTray(move % state.tray.length);
-        state.insertAt(positions[move % positions.length]!);
-
-        const after = store.getState();
-        const scoreReached = after.score >= after.config.targetScore;
-        const boardFull = isRowFull(after.row);
-        expect(scoreReached && boardFull).toBe(false);
-      }
-    }
+    const state = store.getState();
+    expect(state.lost).toBeGreaterThanOrEqual(ORDER.MAX_LOST);
+    expect(state.status).toBe('oyun-bitti');
   });
 
   it('tahta dolunca ve hedefe ulasilmayinca oyun biter', () => {

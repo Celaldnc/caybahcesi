@@ -1,6 +1,24 @@
 import { create } from 'zustand';
 
+import { ORDER } from '@/constants/config';
+
 import { generateTray, refillTray } from '@/game/core/generator';
+import {
+  applyResolve,
+  createCustomer,
+  createOrder,
+  isCustomerGone,
+  isOrderComplete,
+  tickPatience,
+  urgentDemand,
+} from '@/game/core/orders';
+import {
+  applySemaver,
+  canUseSemaver,
+  powersAfterServe,
+  startingPowers,
+  type Powers,
+} from '@/game/core/powerups';
 import {
   createEmptyRow,
   insertPositions,
@@ -12,7 +30,14 @@ import { getLevelConfig, isLevelComplete, nextLevelNumber } from '@/game/core/le
 import { createRng, dailySeed, type Rng } from '@/game/core/rng';
 import { computeScore } from '@/game/core/score';
 import { pickTilePool } from '@/game/core/tiles';
-import type { LevelConfig, ResolveResult, SlotRow, TileId, Tray } from '@/game/core/types';
+import type {
+  Customer,
+  LevelConfig,
+  ResolveResult,
+  SlotRow,
+  TileId,
+  Tray,
+} from '@/game/core/types';
 
 /**
  * Oyun durumu.
@@ -27,6 +52,15 @@ import type { LevelConfig, ResolveResult, SlotRow, TileId, Tray } from '@/game/c
  */
 
 export type GameStatus = 'hazir' | 'oynaniyor' | 'seviye-tamam' | 'oyun-bitti';
+
+/**
+ * Neden kaybedildi.
+ *
+ * Sprint 3'te IKI kaybetme yolu var: satirin dolmasi ve cok musteri
+ * kaybetmek. "Oyun bitti" demek yetmiyor -- oyuncu NEDEN bittigini
+ * bilmeden bir sonraki denemede ayni hatayi yapar.
+ */
+export type LossReason = 'satir-doldu' | 'musteri-bitti' | null;
 
 export interface GameState {
   status: GameStatus;
@@ -56,6 +90,26 @@ export interface GameState {
   bestCombo: number;
   /** Yapilan hamle sayisi. */
   moves: number;
+
+  // --- SIPARIS KATMANI (Sprint 3) ---
+  /** Masalarda bekleyen musteriler. */
+  customers: readonly Customer[];
+  /** Servis edilen musteri sayisi. Seviye hedefi budur. */
+  served: number;
+  /** Sabri tukenip giden musteri sayisi. */
+  lost: number;
+  /** Ozel guc sarjlari. */
+  powers: Powers;
+  /** Bu seviyede harcanan semaver sarji (kumulatif hesap icin). */
+  semaverSpent: number;
+  /** Son hamlede siparise katki oldu mu -- kutlama/duyuru icin. */
+  lastServedTable: boolean;
+  /** Son hamlede kac masa TAMAMLANDI. */
+  lastCompleted: number;
+  /** Son hamlede kac musteri GITTI. */
+  lastLeft: number;
+  /** Kaybedildiyse sebebi; kaybedilmediyse null. */
+  lossReason: LossReason;
 }
 
 export interface GameActions {
@@ -80,9 +134,80 @@ export interface GameActions {
   clearCombo: () => void;
   /** Mevcut seviyeyi bastan baslatir. */
   retry: () => void;
+  /**
+   * Tepsideki tile'i istenen tipe cevirir (semaver).
+   *
+   * Sarj yoksa, oyun bitmisse ya da hedef havuzda degilse sessizce
+   * hicbir sey yapmaz -- cagiran taraf (ekran) zaten butonu devre disi
+   * birakir; bu ikinci savunma hatti.
+   */
+  spendSemaver: (trayIndex: number, targetId: TileId) => void;
 }
 
 export type GameStore = GameState & GameActions;
+
+/** Bir hamlenin masalara yansimasi. `null` = masa bosaldi, yenisi oturmali. */
+interface TableTurn {
+  readonly customers: readonly (Customer | null)[];
+  /** Bu hamlede tamamlanan siparis sayisi. */
+  readonly completed: number;
+  /** Bu hamlede sabri tukenen musteri sayisi. */
+  readonly left: number;
+  /** Herhangi bir masaya katki oldu mu (kutlama/duyuru icin). */
+  readonly servedAny: boolean;
+}
+
+/**
+ * Hamleyi butun masalara yansitir ve sabri bir azaltir.
+ *
+ * Bir eslesme, o tipi bekleyen HER masaya sayilir. Alternatifi (tek masaya
+ * sayip oyuncuya sordurmak) fazladan bir karar ekler ama "ayni anda iki
+ * masayi memnun etme" anini yok ederdi -- oyunun en iyi hissettiren ani.
+ */
+function serveTables(customers: readonly Customer[], result: ResolveResult): TableTurn {
+  let completed = 0;
+  let left = 0;
+  let servedAny = false;
+
+  const next = customers.map((customer) => {
+    const order = applyResolve(customer.order, result);
+    if (order !== customer.order) servedAny = true;
+
+    // Sabir HER hamlede azalir -- katki yapan masalarda bile. Aksi halde
+    // oyuncu bedava zaman kazanir ve baski tumden kaybolur.
+    const ticked = tickPatience({ ...customer, order });
+
+    if (isOrderComplete(ticked.order)) {
+      completed++;
+      return null;
+    }
+    if (isCustomerGone(ticked)) {
+      left++;
+      return null;
+    }
+    return ticked;
+  });
+
+  return { customers: next, completed, left, servedAny };
+}
+
+/**
+ * Kaybetme sebebi; henuz kaybedilmediyse null.
+ *
+ * MUSTERI KAYBI ONCE KONTROL EDILIR: ayni hamlede hem esik asilip hem
+ * satir dolduysa oyuncuya daha bilgilendirici olani soylenir -- satir
+ * dolmasi genellikle musteri kaybinin SONUCUDUR, sebebi degil.
+ */
+function findLossReason(lost: number, row: SlotRow): LossReason {
+  if (lost >= ORDER.MAX_LOST) return 'musteri-bitti';
+  if (isRowFull(row)) return 'satir-doldu';
+  return null;
+}
+
+/** Butun masalarin acil talebi -- uretici hepsini birden kollar. */
+function allUrgentDemand(customers: readonly Customer[]): readonly TileId[] {
+  return [...new Set(customers.flatMap((customer) => urgentDemand(customer)))];
+}
 
 /** Seviyeye ozgu rastgelelik. State'te degil, closure'da tutulur (bkz. dosya basi). */
 interface Session {
@@ -108,7 +233,28 @@ function emptyState(level: number): GameState {
     lastGain: 0,
     bestCombo: 0,
     moves: 0,
+    customers: [],
+    served: 0,
+    lost: 0,
+    powers: startingPowers(),
+    semaverSpent: 0,
+    lastServedTable: false,
+    lastCompleted: 0,
+    lastLeft: 0,
+    lossReason: null,
   };
+}
+
+/** Masalari doldurur. Musteri sayisi `ORDER.TABLES`. */
+function seatCustomers(
+  pool: readonly TileId[],
+  rng: Rng,
+  tileTypeCount: number,
+  startId: number,
+): readonly Customer[] {
+  return Array.from({ length: ORDER.TABLES }, (_, i) =>
+    createCustomer(`m${startId + i}`, createOrder(pool, rng), tileTypeCount),
+  );
 }
 
 /**
@@ -133,13 +279,16 @@ export function createGameStore() {
       const pool = pickTilePool(config.tileTypeCount, rng);
       const row = createEmptyRow(config.slotCount);
 
+      const customers = seatCustomers(pool, rng, config.tileTypeCount, 0);
+
       set({
         ...emptyState(level),
         status: 'oynaniyor',
         config,
         pool,
         row,
-        tray: generateTray(row, pool, rng),
+        customers,
+        tray: generateTray(row, pool, rng, { demand: allUrgentDemand(customers) }),
       });
     },
 
@@ -172,20 +321,42 @@ export function createGameStore() {
       const breakdown = computeScore(result);
       const score = state.score + breakdown.total;
 
+      // --- SIPARIS: hamleyi butun masalara yansit, sabri bir azalt ---
+      const table = serveTables(state.customers, result);
+      const served = state.served + table.completed;
+      const lost = state.lost + table.left;
+
+      // Bosalan masalara yeni musteri oturur.
+      const customers = table.customers.map((customer, index) =>
+        customer === null
+          ? createCustomer(
+              `m${ORDER.TABLES + served + lost + index}`,
+              createOrder(pool, session!.rng),
+              config.tileTypeCount,
+            )
+          : customer,
+      );
+
+      const powers = powersAfterServe(state.semaverSpent, served);
+
       const nextTray = refillTray(
         result.row,
         tray.filter((_, index) => index !== selectedTrayIndex),
         pool,
         session.rng,
+        { demand: allUrgentDemand(customers) },
       );
 
-      // Sira onemli: once seviye tamam mi, sonra tahta doldu mu.
+      // Sira onemli: once seviye tamam mi, sonra kaybettik mi.
       // Hedefe ulastiran hamle tahtayi doldurmus olsa bile oyuncu kazanir.
-      const status: GameStatus = isLevelComplete(score, config)
+      // Sira onemli: once "kazandik mi", sonra "kaybettik mi".
+      const won = isLevelComplete(served, config);
+      const lossReason = won ? null : findLossReason(lost, result.row);
+      const status: GameStatus = won
         ? 'seviye-tamam'
-        : isRowFull(result.row)
-          ? 'oyun-bitti'
-          : 'oynaniyor';
+        : lossReason === null
+          ? 'oynaniyor'
+          : 'oyun-bitti';
 
       set({
         status,
@@ -198,6 +369,32 @@ export function createGameStore() {
         lastGain: breakdown.total,
         bestCombo: Math.max(state.bestCombo, breakdown.maxCombo),
         moves: state.moves + 1,
+        customers,
+        served,
+        lost,
+        powers,
+        lastServedTable: table.servedAny,
+        lastCompleted: table.completed,
+        lastLeft: table.left,
+        lossReason,
+      });
+    },
+
+    spendSemaver: (trayIndex, targetId) => {
+      const state = get();
+      if (state.status !== 'oynaniyor' || !canUseSemaver(state.powers)) return;
+      if (trayIndex < 0 || trayIndex >= state.tray.length) return;
+      if (!state.pool.includes(targetId)) return;
+
+      const semaverSpent = state.semaverSpent + 1;
+
+      set({
+        tray: applySemaver(state.tray, trayIndex, targetId, state.pool),
+        semaverSpent,
+        powers: powersAfterServe(semaverSpent, state.served),
+        // Donusen tile SECILI KALMAZ: oyuncu yeni tile'i bilerek secsin,
+        // yanlislikla eski secimle yerlestirmesin.
+        selectedTrayIndex: null,
       });
     },
 

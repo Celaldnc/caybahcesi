@@ -58,11 +58,6 @@ function tileTypeCountFor(levelNumber: number): number {
   return LEVEL.MIN_TILE_TYPES + Math.round(span * progress);
 }
 
-/** Level numarasindan hedef skor. */
-function targetScoreFor(levelNumber: number): number {
-  return LEVEL.BASE_TARGET_SCORE + LEVEL.TARGET_SCORE_STEP * (levelNumber - 1);
-}
-
 /**
  * Level numarasindan servis edilecek musteri sayisi: BASE'den MAX'a dogrusal.
  *
@@ -84,7 +79,6 @@ export function getLevelConfig(levelNumber: number): LevelConfig {
     number: levelNumber,
     slotCount: slotCountFor(levelNumber),
     tileTypeCount: tileTypeCountFor(levelNumber),
-    targetScore: targetScoreFor(levelNumber),
     customerCount: customerCountFor(levelNumber),
   };
 }
@@ -94,23 +88,34 @@ export const ALL_LEVELS: readonly LevelConfig[] = Array.from({ length: LEVEL.TOT
   getLevelConfig(index + 1),
 );
 
-/** Skor hedefe ulasti mi? */
-export function isLevelComplete(score: number, config: LevelConfig): boolean {
-  if (!Number.isFinite(score) || score < 0) {
-    throw new RangeError(`Skor negatif olmayan bir sayi olmali, alinan: ${score}`);
+/**
+ * Seviye tamamlandi mi?
+ *
+ * OLCUT SERVIS EDILEN MUSTERI, SKOR DEGIL. Skor hedefi Sprint 3'te
+ * kaldirildi: eslesme orani 1/3'e civili oldugu icin hedef skoru
+ * yukseltmek seviyeyi zorlastirmiyor, yalnizca UZATIYORDU (olculdu).
+ * Zorluk artik sabir sikligindan geliyor.
+ */
+export function isLevelComplete(servedCustomers: number, config: LevelConfig): boolean {
+  if (!Number.isInteger(servedCustomers) || servedCustomers < 0) {
+    throw new RangeError(
+      `Servis sayisi negatif olmayan tam sayi olmali, alinan: ${servedCustomers}`,
+    );
   }
-  return score >= config.targetScore;
+  return servedCustomers >= config.customerCount;
 }
 
 /**
  * Hedefe ilerleme orani, 0..1 arasi.
  * Ilerleme cubugu tasmasin diye 1'de sinirlanir.
  */
-export function progressRatio(score: number, config: LevelConfig): number {
-  if (!Number.isFinite(score) || score < 0) {
-    throw new RangeError(`Skor negatif olmayan bir sayi olmali, alinan: ${score}`);
+export function progressRatio(servedCustomers: number, config: LevelConfig): number {
+  if (!Number.isInteger(servedCustomers) || servedCustomers < 0) {
+    throw new RangeError(
+      `Servis sayisi negatif olmayan tam sayi olmali, alinan: ${servedCustomers}`,
+    );
   }
-  return Math.min(score / config.targetScore, 1);
+  return Math.min(servedCustomers / config.customerCount, 1);
 }
 
 /** Sonraki level numarasi; son levelden sonra null (oyun tamamlandi). */

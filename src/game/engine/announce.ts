@@ -1,6 +1,6 @@
 import { AccessibilityInfo, Platform } from 'react-native';
 
-import type { GameStatus } from '@/game/store/gameStore';
+import type { GameStatus, LossReason } from '@/game/store/gameStore';
 
 /**
  * Ekran okuyucu duyurulari.
@@ -34,6 +34,32 @@ export interface MoveSnapshot {
   /** Satirin kapasitesi. */
   slotCount: number;
   moves: number;
+  /** Bu hamlede tamamlanan masa sayisi. */
+  completed: number;
+  /** Bu hamlede sabri tukenip giden musteri sayisi. */
+  left: number;
+  /** Kaybedildiyse sebebi. */
+  lossReason: LossReason;
+}
+
+/**
+ * MASA OLAYLARI HER SEYIN ONUNDE.
+ *
+ * Ekran okuyucu uzun cumleyi bastan okur; oyuncunun ilk ogrenmesi gereken
+ * sey bir masanin kazanildigi ya da kaybedildigidir -- puan ayrintisi
+ * ondan sonra gelir. Bos dizeyle donerse cumle dogrudan sonuca baslar.
+ */
+function tableEventPrefix(completed: number, left: number): string {
+  const events: string[] = [];
+
+  if (completed > 0) {
+    events.push(completed === 1 ? 'Masa servis edildi!' : `${completed} masa servis edildi!`);
+  }
+  if (left > 0) {
+    events.push(left === 1 ? 'Bir müşteri gitti.' : `${left} müşteri gitti.`);
+  }
+
+  return events.length === 0 ? '' : `${events.join(' ')} `;
 }
 
 /**
@@ -46,24 +72,30 @@ export interface MoveSnapshot {
  * `null` donmez -- her hamle duyurulur. Sessiz hamle, Sprint 2'nin hatasiydi.
  */
 export function moveAnnouncement(snapshot: MoveSnapshot): string {
-  const { status, score, gain, combo, filled, slotCount, moves } = snapshot;
+  const { status, score, gain, combo, filled, slotCount, moves, completed, left, lossReason } =
+    snapshot;
 
   if (status === 'seviye-tamam') {
     return `Seviye tamamlandı! ${moves} hamlede ${score} puan.`;
   }
   if (status === 'oyun-bitti') {
-    return `Satır doldu, oyun bitti. ${score} puan.`;
+    // SEBEBI SOYLE: iki farkli kaybetme yolu var, "oyun bitti" demek
+    // oyuncuyu ayni hatayi tekrarlamaya birakir.
+    const why = lossReason === 'musteri-bitti' ? 'Çok fazla müşteri gitti.' : 'Satır doldu.';
+    return `${why} Çay bahçesi kapandı, ${score} puan.`;
   }
+
+  const prefix = tableEventPrefix(completed, left);
 
   const remaining = slotCount - filled;
   const capacity = remaining === 1 ? 'Son boş slot!' : `${remaining} boş slot.`;
 
   if (gain <= 0) {
-    return `Yerleştirildi. ${capacity}`;
+    return `${prefix}Yerleştirildi. ${capacity}`;
   }
 
   const comboPart = combo > 1 ? `Combo çarpı ${combo}! ` : '';
-  return `${comboPart}Eşleşme, artı ${gain} puan. Toplam ${score}. ${capacity}`;
+  return `${prefix}${comboPart}Eşleşme, artı ${gain} puan. Toplam ${score}. ${capacity}`;
 }
 
 /**

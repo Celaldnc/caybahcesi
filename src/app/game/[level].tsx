@@ -1,20 +1,23 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, type ReactElement } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { Text, useThemeColor } from '@/components/Themed';
-import { ANIM, LEVEL, OPACITY, SPACING, TYPO, WEIGHT } from '@/constants/config';
+import { ANIM, LEVEL, OPACITY, RADIUS, SPACING, TOUCH, TYPO, WEIGHT } from '@/constants/config';
 import { progressRatio } from '@/game/core/level';
 import { tilesOf } from '@/game/core/matcher';
+import { neededTileIds } from '@/game/core/orders';
+import { canUseSemaver } from '@/game/core/powerups';
 import { announce, moveAnnouncement } from '@/game/engine/announce';
 import { ComboBanner } from '@/game/engine/ComboBanner';
 import { computeTileSize } from '@/game/engine/layout';
+import { TableRow } from '@/game/engine/OrderCard';
 import { SlotRow } from '@/game/engine/SlotRow';
 import { TilePicker } from '@/game/engine/TilePicker';
-import { useGameStore } from '@/game/store/gameStore';
-import { useHaptics } from '@/hooks/useHaptics';
+import { useGameStore, type GameStatus, type LossReason } from '@/game/store/gameStore';
+import { useHaptics, type HapticKind } from '@/hooks/useHaptics';
 
 /**
  * Oyun ekrani.
@@ -33,6 +36,26 @@ import { useHaptics } from '@/hooks/useHaptics';
  * cunku `setParams` mock'u parametreyi gercekten degistirmiyordu.
  */
 
+/** Siparis kartindaki tile, satirdakinin bu orani kadar cizilir. */
+const ORDER_TILE_RATIO = 0.7;
+
+/**
+ * Alt satirdaki yonlendirme metni.
+ *
+ * Ayri fonksiyon: ekran bileseninin dallanmasini dusuk tutuyor ve metin
+ * kombinasyonlari tek yerden test edilebiliyor.
+ */
+export function hintText(
+  playing: boolean,
+  semaverArmed: boolean,
+  selectedTrayIndex: number | null,
+): string {
+  if (!playing) return 'Oyun bitti';
+  if (semaverArmed) return 'Hangi masaya çevirelim?';
+  if (selectedTrayIndex === null) return 'Bir tile seç';
+  return 'Şimdi satırda bir konuma dokun';
+}
+
 /** Rota parametresinden gecerli bir seviye numarasi cikarir. */
 export function parseLevelParam(raw: string | string[] | undefined): number {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -48,9 +71,19 @@ export default function GameScreen(): ReactElement {
   const { width } = useWindowDimensions();
   const haptic = useHaptics();
   const backdrop = useThemeColor({}, 'background');
+  const accent = useThemeColor({}, 'accent');
 
   const state = useGameStore();
-  const { startLevel, selectTray, insertAt, clearCombo, retry } = state;
+  const { startLevel, selectTray, insertAt, clearCombo, retry, spendSemaver } = state;
+
+  /*
+   * SEMAVER "kurulu" mu?
+   *
+   * Yerel durum, store'da degil: bu bir NIYET, oyun durumu degil. Store'a
+   * konsaydi kaydedilir/geri yuklenirdi ve oyuncu oyunu yarim birakip
+   * dondugunde acikta kalmis bir niyetle karsilasirdi.
+   */
+  const [semaverArmed, setSemaverArmed] = useState(false);
 
   // Ekran acildiginda (ya da seviye degistiginde) oyunu kur.
   useEffect(() => {
@@ -58,7 +91,9 @@ export default function GameScreen(): ReactElement {
   }, [level, startLevel]);
 
   const tileSize = computeTileSize(width - SPACING.xl * 2, state.config.slotCount);
-  const progress = progressRatio(state.score, state.config);
+  const progress = progressRatio(state.served, state.config);
+  const orderTileSize = Math.round(tileSize * ORDER_TILE_RATIO);
+  const semaverReady = canUseSemaver(state.powers) && state.selectedTrayIndex !== null;
   const playing = state.status === 'oynaniyor';
   const finished = state.status === 'seviye-tamam' || state.status === 'oyun-bitti';
 
@@ -71,7 +106,18 @@ export default function GameScreen(): ReactElement {
    * seviye gecisinde sayac sifirlandiginda eski anahtar yeni hamleyi
    * yutmasin diye seviye de anahtara dahil.
    */
-  const { status, score, lastGain, lastCombo, row, config, moves } = state;
+  const {
+    status,
+    score,
+    lastGain,
+    lastCombo,
+    row,
+    config,
+    moves,
+    lastCompleted,
+    lastLeft,
+    lossReason,
+  } = state;
   const announceKey = `${state.level}:${moves}`;
   // `null` = bu mount'ta henuz taban alinmadi.
   const announcedRef = useRef<string | null>(null);
@@ -103,9 +149,24 @@ export default function GameScreen(): ReactElement {
         filled: tilesOf(row).length,
         slotCount: config.slotCount,
         moves,
+        completed: lastCompleted,
+        left: lastLeft,
+        lossReason,
       }),
     );
-  }, [announceKey, moves, status, score, lastGain, lastCombo, row, config.slotCount]);
+  }, [
+    announceKey,
+    moves,
+    status,
+    score,
+    lastGain,
+    lastCombo,
+    row,
+    config.slotCount,
+    lastCompleted,
+    lastLeft,
+    lossReason,
+  ]);
 
   /*
    * Combo banner'inin OMRU. `ANIM.COMBO_BANNER_MS` "ekranda kalma suresi"
@@ -143,6 +204,21 @@ export default function GameScreen(): ReactElement {
     [haptic, selectTray],
   );
 
+  const handleSemaver = useCallback(
+    (tableIndex: number): void => {
+      const current = useGameStore.getState();
+      const customer = current.customers[tableIndex];
+      const target = customer === undefined ? undefined : neededTileIds(customer.order)[0];
+
+      if (current.selectedTrayIndex === null || target === undefined) return;
+
+      haptic('basari');
+      spendSemaver(current.selectedTrayIndex, target);
+      setSemaverArmed(false);
+    },
+    [haptic, spendSemaver],
+  );
+
   const handleInsert = useCallback(
     (position: number): void => {
       insertAt(position);
@@ -170,9 +246,22 @@ export default function GameScreen(): ReactElement {
             {state.score}
           </Text>
           <Text style={styles.target}>
-            Hedef {state.config.targetScore} · {Math.round(progress * 100)}%
+            Servis {state.served}/{state.config.customerCount} · {Math.round(progress * 100)}%
           </Text>
         </View>
+
+        {/*
+          MASALAR. Uc siparis karti; her biri renk + form + sayi + sabir
+          cubugu tasiyor. Semaver kuruluyken kartlar BUTONA donusur:
+          "bu masanin istedigi tipe cevir".
+        */}
+        <TableRow
+          customers={state.customers}
+          tileSize={orderTileSize}
+          armed={semaverArmed && playing}
+          onPickTable={handleSemaver}
+          testID="masalar"
+        />
 
         <View style={styles.board}>
           <SlotRow
@@ -194,12 +283,31 @@ export default function GameScreen(): ReactElement {
             enabled={playing}
             testID="tepsi"
           />
+          <Pressable
+            testID="semaver"
+            onPress={() => setSemaverArmed((armed) => !armed)}
+            disabled={!semaverReady}
+            accessibilityRole="button"
+            accessibilityLabel={`Semaver, ${state.powers.semaver} hak`}
+            accessibilityHint={
+              semaverReady
+                ? 'Seçili tile’ı bir masanın istediği tipe çevirir'
+                : 'Önce tepsiden bir tile seç'
+            }
+            accessibilityState={{ disabled: !semaverReady, selected: semaverArmed }}
+            hitSlop={SPACING.sm}
+            style={[
+              styles.semaver,
+              { borderColor: accent },
+              semaverArmed ? { backgroundColor: accent } : null,
+              semaverReady ? null : styles.semaverOff,
+            ]}
+          >
+            <Text style={styles.semaverText}>Semaver ×{state.powers.semaver}</Text>
+          </Pressable>
+
           <Text style={styles.hint}>
-            {!playing
-              ? 'Oyun bitti'
-              : state.selectedTrayIndex === null
-                ? 'Bir tile seç'
-                : 'Şimdi satırda bir konuma dokun'}
+            {hintText(playing, semaverArmed, state.selectedTrayIndex)}
           </Text>
         </View>
       </Screen>
@@ -213,64 +321,111 @@ export default function GameScreen(): ReactElement {
         arkadaki olu kontrollerde dolasir.
       */}
       {finished ? (
-        <View
-          style={[styles.overlay, { backgroundColor: backdrop }]}
-          accessibilityViewIsModal
-          testID={state.status === 'seviye-tamam' ? 'seviye-tamam' : 'oyun-bitti'}
-        >
-          {state.status === 'seviye-tamam' ? (
-            <>
-              <Text style={styles.overlayTitle} accessibilityRole="header">
-                Seviye tamamlandı!
-              </Text>
-              <Text style={styles.overlayBody}>
-                {state.moves} hamlede {state.score} puan
-              </Text>
-              <Button
-                label={level < LEVEL.TOTAL ? 'Sonraki seviye' : 'Bitir'}
-                accessibilityHint={
-                  level < LEVEL.TOTAL ? `Seviye ${level + 1} açılır` : 'Ana ekrana döner'
-                }
-                onPress={() => {
-                  haptic('basari');
-                  if (level < LEVEL.TOTAL) {
-                    // YALNIZCA setParams -- effect seviyeyi bir kez kurar.
-                    router.setParams({ level: String(level + 1) });
-                  } else {
-                    router.back();
-                  }
-                }}
-              />
-            </>
-          ) : (
-            <>
-              <Text style={styles.overlayTitle} accessibilityRole="header">
-                Satır doldu
-              </Text>
-              <Text style={styles.overlayBody}>
-                {state.score} puan · hedef {state.config.targetScore}
-              </Text>
-              <View style={styles.overlayActions}>
-                <Button
-                  label="Tekrar dene"
-                  accessibilityHint="Aynı seviyeyi baştan başlatır"
-                  onPress={() => {
-                    haptic('sec');
-                    retry();
-                  }}
-                />
-                <Button
-                  label="Geri"
-                  variant="secondary"
-                  accessibilityHint="Ana ekrana döner"
-                  onPress={() => router.back()}
-                />
-              </View>
-            </>
-          )}
-        </View>
+        <FinishOverlay
+          status={state.status}
+          level={level}
+          served={state.served}
+          lossReason={state.lossReason}
+          customerCount={state.config.customerCount}
+          score={state.score}
+          moves={state.moves}
+          backdrop={backdrop}
+          haptic={haptic}
+          onRetry={retry}
+        />
       ) : null}
     </>
+  );
+}
+
+interface FinishOverlayProps {
+  status: GameStatus;
+  level: number;
+  served: number;
+  customerCount: number;
+  score: number;
+  moves: number;
+  lossReason: LossReason;
+  backdrop: string;
+  haptic: (kind: HapticKind) => void;
+  onRetry: () => void;
+}
+
+/**
+ * Bitis ekrani -- AKISIN DISINDA, USTUNDE.
+ *
+ * Sprint 2'de bu `ScrollView`'in normal cocuguydu: oyun bitince tahta ile
+ * tepsi ARASINA giriyor, tepsiyi asagi zipatiyor ve arkadaki tepsi hala
+ * basilabilir kaliyordu. `accessibilityViewIsModal` ekran okuyucunun
+ * odagini overlay'e hapseder.
+ */
+function FinishOverlay({
+  status,
+  level,
+  served,
+  customerCount,
+  score,
+  moves,
+  lossReason,
+  backdrop,
+  haptic,
+  onRetry,
+}: FinishOverlayProps): ReactElement {
+  const won = status === 'seviye-tamam';
+  const isLast = level >= LEVEL.TOTAL;
+
+  return (
+    <View
+      style={[styles.overlay, { backgroundColor: backdrop }]}
+      accessibilityViewIsModal
+      testID={won ? 'seviye-tamam' : 'oyun-bitti'}
+    >
+      <Text style={styles.overlayTitle} accessibilityRole="header">
+        {won
+          ? 'Seviye tamamlandı!'
+          : lossReason === 'musteri-bitti'
+            ? 'Müşteriler gitti'
+            : 'Satır doldu'}
+      </Text>
+      <Text style={styles.overlayBody}>
+        {won
+          ? `${moves} hamlede ${score} puan`
+          : `${served}/${customerCount} servis · ${score} puan`}
+      </Text>
+
+      {won ? (
+        <Button
+          label={isLast ? 'Bitir' : 'Sonraki seviye'}
+          accessibilityHint={isLast ? 'Ana ekrana döner' : `Seviye ${level + 1} açılır`}
+          onPress={() => {
+            haptic('basari');
+            if (isLast) {
+              router.back();
+            } else {
+              // YALNIZCA setParams -- effect seviyeyi bir kez kurar.
+              router.setParams({ level: String(level + 1) });
+            }
+          }}
+        />
+      ) : (
+        <View style={styles.overlayActions}>
+          <Button
+            label="Tekrar dene"
+            accessibilityHint="Aynı seviyeyi baştan başlatır"
+            onPress={() => {
+              haptic('sec');
+              onRetry();
+            }}
+          />
+          <Button
+            label="Geri"
+            variant="secondary"
+            accessibilityHint="Ana ekrana döner"
+            onPress={() => router.back()}
+          />
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -286,6 +441,21 @@ const styles = StyleSheet.create({
   target: {
     fontSize: TYPO.caption,
     opacity: OPACITY.muted,
+  },
+  semaver: {
+    borderWidth: 2,
+    borderRadius: RADIUS.button,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    minHeight: TOUCH.MIN_TARGET / 2,
+    justifyContent: 'center',
+  },
+  semaverOff: {
+    opacity: OPACITY.disabled,
+  },
+  semaverText: {
+    fontSize: TYPO.caption,
+    fontWeight: WEIGHT.bold,
   },
   board: {
     alignItems: 'center',

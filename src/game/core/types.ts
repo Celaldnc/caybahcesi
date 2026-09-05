@@ -228,9 +228,13 @@ export interface LevelConfig {
   readonly slotCount: number;
   /** Bu seviyede havuzda kac farkli tile tipi var. */
   readonly tileTypeCount: number;
-  /** Seviyeyi bitirmek icin gereken skor. */
-  readonly targetScore: number;
-  /** Seviyeyi bitirmek icin servis edilmesi gereken musteri sayisi. */
+  /**
+   * Seviyeyi bitirmek icin servis edilmesi gereken musteri sayisi.
+   *
+   * SEVIYE HEDEFI BUDUR, skor DEGIL. Skor hedefi Sprint 3'te kaldirildi:
+   * olculdu ki eslesme orani 1/3'e civili oldugundan hedef skoru
+   * yukseltmek seviyeyi zorlastirmiyor, yalnizca UZATIYORDU.
+   */
   readonly customerCount: number;
 }
 

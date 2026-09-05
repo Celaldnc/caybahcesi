@@ -19,6 +19,9 @@ const BASE: MoveSnapshot = {
   filled: 3,
   slotCount: 7,
   moves: 5,
+  completed: 0,
+  left: 0,
+  lossReason: null,
 };
 
 describe('moveAnnouncement', () => {
@@ -58,9 +61,29 @@ describe('moveAnnouncement', () => {
     expect(text).toBe('Seviye tamamlandı! 18 hamlede 200 puan.');
   });
 
-  it('oyun bittiginde sebebi ve skoru bildirir', () => {
-    const text = moveAnnouncement({ ...BASE, status: 'oyun-bitti', score: 90 });
-    expect(text).toBe('Satır doldu, oyun bitti. 90 puan.');
+  /**
+   * SEBEBI SOYLE. Sprint 3'te IKI kaybetme yolu var: satirin dolmasi ve
+   * cok musteri kaybetmek. "Oyun bitti" demek, oyuncuyu ayni hatayi
+   * tekrarlamaya birakir.
+   */
+  it('satir dolarak kaybedildiginde sebebini bildirir', () => {
+    const text = moveAnnouncement({
+      ...BASE,
+      status: 'oyun-bitti',
+      score: 90,
+      lossReason: 'satir-doldu',
+    });
+    expect(text).toBe('Satır doldu. Çay bahçesi kapandı, 90 puan.');
+  });
+
+  it('musteri kaybederek kaybedildiginde sebebini bildirir', () => {
+    const text = moveAnnouncement({
+      ...BASE,
+      status: 'oyun-bitti',
+      score: 40,
+      lossReason: 'musteri-bitti',
+    });
+    expect(text).toContain('Çok fazla müşteri gitti.');
   });
 
   /**
