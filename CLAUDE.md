@@ -192,6 +192,53 @@ Aynısı `accessibilityElementsHidden` için de geçerli (glif `Text`'i).
 
 Çözüm: mount'ta **taban al, duyurma** (`useRef<string | null>(null)`).
 
+## Derinlik arayışı: beş ölçüm, tek teşhis (Sprint 3)
+
+Oyun "çok basit" bulundu. Beş ayrı mekanik denendi ve **adil A/B** ile ölçüldü
+(aynı politika, tek fark denenen mekanik — "iyi oyuncu vs kötü oyuncu"
+karşılaştırması değil). 300 tohum:
+
+| mekanik                           | beceri farkı                             | not                                                           |
+| --------------------------------- | ---------------------------------------- | ------------------------------------------------------------- |
+| Sipariş farkındalığı (semaversiz) | **~0pp**                                 | siparişi umursayan ≈ umursamayan                              |
+| Tepsiyi büyütmek (3 → 6)          | **~0pp**                                 | sipariş etkileşimi %11.2 → %10.5                              |
+| İkinci sıra (tezgâh)              | **+0.0pp**                               | zorluğu değiştirdi (L30 %93 → %68), derinliği değil           |
+| Zincir → semaver şarjı            | **+0.0pp**                               | oyun başına **0.00 zincir** oluşuyor                          |
+| Rezerv (hold) slotu               | **−1.7…−9.0pp**                          | sezgisel kural yanlış: çifti _başlatacak_ tile'ı geciktiriyor |
+| Stok sınırı (hamle bütçesi)       | **~0pp**                                 | herkesi eşit zorlaştırıyor, ayırmıyor                         |
+| **Semaver (tile → istenen aile)** | **+1…+5pp**                              | **işleyen tek şey**                                           |
+| Demlik (arzı N hamle yönlendir)   | +0.7…+3.0pp kıtken, **%100** sınırsızken | etki, kapsadığı arz oranıyla orantılı                         |
+
+### Teşhis: İYİ hamlelerin dallanma çarpanı ≈ 1
+
+Hepsi aynı sebepten düştü. 7-9 slotluk bir satır ve 3 tile'lık tepsiyle,
+herhangi bir anda **genellikle en fazla BİR eşleşme mümkün**. "Hangi
+eşleşmeyi tercih edeyim" sorusu neredeyse hiç doğmuyor; oyuncunun iki iyi
+seçeneği aynı anda olmuyor.
+
+Bu yüzden:
+
+- Yerleştirme mekanikleri (raf, konum, rezerv) fark yaratmıyor — seçilecek
+  bir şey yok.
+- Ödül mekanikleri (zincir, stok) fark yaratmıyor — ödüle giden yol yine tek.
+- Arz mekanikleri (semaver, demlik) **yaratıyor** — çünkü tek seçeneği
+  _değiştiriyorlar_, seçenekler arasından seçtirmiyorlar.
+
+**Kural: derinlik eklemek isteyen, önce aynı anda uygulanabilir iyi hamle
+sayısını artırmalı.** Ödül ya da kısıt eklemek, tek seçenekli bir duruma
+derinlik katmaz.
+
+Not: "eşleşme oranı 1/3'e çivili" korunumu bunun akrabası ama aynısı değil.
+O, ne kadar HIZLI ilerlediğini sabitliyor; bu, kaç FARKLI şekilde
+ilerleyebileceğini sabitliyor.
+
+### Ölçüm yaparken: politikaları AYNI gövdeden üret
+
+İlk denemede "planlayan vs açgözlü" karşılaştırması +81pp gibi muhteşem bir
+sonuç verdi — ama açgözlü politikaya çift kurma adımını koymamıştım. Yani
+"plan vs beceriksiz" ölçmüştüm, geçersiz. Doğrusu tek bir `makePolicy(flag)`
+gövdesinden iki varyant üretmek: fark yalnızca denenen mekanik olsun.
+
 ## Bu projede yanan tuzaklar (tekrar düşme)
 
 ### RNTL v14: `render` ve `fireEvent` **async**
