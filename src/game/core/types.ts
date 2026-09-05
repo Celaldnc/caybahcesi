@@ -186,6 +186,41 @@ export type Tray = readonly Tile[];
 
 export type GameMode = 'classic' | 'daily' | 'relax';
 
+/**
+ * Bir siparis satiri: bir tile tipinden kac ESLESME isteniyor.
+ *
+ * Birim ESLESME'dir, tile degil: "3 cay" demek uc kez cay uclusu degil,
+ * uc bardak cay demektir -- yani `required: 3` uc ESLESME ister. Bir
+ * eslesme MATCH.LENGTH tile kaldirdigi icin bu ayrim onemli; 4'lu bir
+ * eslesme de tek birim sayilir (fazla tile zaten skor bonusu veriyor).
+ */
+export interface OrderLine {
+  readonly tileId: TileId;
+  /** Kac eslesme gerekiyor. */
+  readonly required: number;
+  /** Kac tanesi teslim edildi. */
+  readonly served: number;
+}
+
+/** Bir musterinin istedikleri. */
+export type Order = readonly OrderLine[];
+
+/**
+ * Sabri olan musteri.
+ *
+ * `patience` HAMLE cinsindendir, saniye degil -- bkz. `ORDER` yorumu.
+ * Deterministik oldugu icin simule edilebilir ve ekran okuyucu
+ * kullanicisini okuma hizindan dolayi cezalandirmaz.
+ */
+export interface Customer {
+  readonly id: string;
+  readonly order: Order;
+  /** Kalan sabir (hamle). 0 = musteri gider. */
+  readonly patience: number;
+  /** Baslangic sabri -- ilerleme cubugu bunun oranini gosterir. */
+  readonly maxPatience: number;
+}
+
 export interface LevelConfig {
   /** 1'den baslar. */
   readonly number: number;
@@ -195,6 +230,8 @@ export interface LevelConfig {
   readonly tileTypeCount: number;
   /** Seviyeyi bitirmek icin gereken skor. */
   readonly targetScore: number;
+  /** Seviyeyi bitirmek icin servis edilmesi gereken musteri sayisi. */
+  readonly customerCount: number;
 }
 
 // ---------------------------------------------------------------------------

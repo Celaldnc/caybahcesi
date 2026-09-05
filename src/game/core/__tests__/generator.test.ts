@@ -117,13 +117,13 @@ describe('refillTray', () => {
 
   it('gecersiz tray boyutunu reddeder', () => {
     const emptyRow = createEmptyRow(7);
-    expect(() => refillTray(emptyRow, [], POOL, createRng(1), 0)).toThrow(RangeError);
-    expect(() => refillTray(emptyRow, [], POOL, createRng(1), -1)).toThrow(RangeError);
-    expect(() => refillTray(emptyRow, [], POOL, createRng(1), 2.5)).toThrow(RangeError);
+    expect(() => refillTray(emptyRow, [], POOL, createRng(1), { size: 0 })).toThrow(RangeError);
+    expect(() => refillTray(emptyRow, [], POOL, createRng(1), { size: -1 })).toThrow(RangeError);
+    expect(() => refillTray(emptyRow, [], POOL, createRng(1), { size: 2.5 })).toThrow(RangeError);
   });
 
   it('ozel tray boyutuyla calisir', () => {
-    expect(refillTray(createEmptyRow(7), [], POOL, createRng(1), 5)).toHaveLength(5);
+    expect(refillTray(createEmptyRow(7), [], POOL, createRng(1), { size: 5 })).toHaveLength(5);
   });
 });
 
@@ -417,6 +417,98 @@ describe('property: oyuncu simulasyonlari', () => {
         policy: carelessPolicy,
       });
       expect(result.moves).toBeGreaterThanOrEqual(SLOTS.INITIAL);
+    }
+  });
+});
+
+/**
+ * SIPARIS ADALETI KATMANI (Sprint 3).
+ *
+ * Ikinci bir "kendi hatan olmadan kaybetme" yolu dogdu: musteri cay
+ * istiyor ama cay tepsiye hic gelmiyor. Satir guvenligiyle ayni gerekce,
+ * ama ONCELIGI DUSUK -- seviyeyi tumden kaybetmek (satir dolmasi), bir
+ * musteriyi kaybetmekten kotudur.
+ */
+describe('siparis adaleti (demand)', () => {
+  const emptyRow = createEmptyRow(7);
+
+  /** Tepsideki tip kumesi. */
+  function idsOf(tray: readonly Tile[]): readonly TileId[] {
+    return tray.map((tile) => tile.id);
+  }
+
+  it('talep yokken davranis degismez', () => {
+    // `Tile.key` her uretimde benzersiz; sozlesme TIP dizisi uzerinde.
+    const withoutDemand = generateTray(emptyRow, POOL, createRng(9));
+    const withEmptyDemand = generateTray(emptyRow, POOL, createRng(9), { demand: [] });
+    expect(idsOf(withEmptyDemand)).toEqual(idsOf(withoutDemand));
+  });
+
+  /**
+   * ASIL SOZLESME: talep varsa ve tepsi onu tasimiyorsa, tepside
+   * mutlaka talep edilen tiplerden biri bulunur.
+   */
+  it('talep edilen tip tepsiye konur', () => {
+    let forcedCount = 0;
+
+    for (let seed = 1; seed <= 100; seed++) {
+      const tray = generateTray(emptyRow, POOL, createRng(seed), { demand: [SHORT.D] });
+      expect(idsOf(tray)).toContain(SHORT.D);
+      forcedCount++;
+    }
+
+    // Denetimin YAPILDIGINI da iddia et (CLAUDE.md vakum kurali).
+    expect(forcedCount).toBe(100);
+  });
+
+  it('tepsi talebi zaten tasiyorsa zorlamaz', () => {
+    const current: readonly Tile[] = [createTile(SHORT.D)];
+    const withDemand = refillTray(emptyRow, current, POOL, createRng(3), { demand: [SHORT.D] });
+    const withoutDemand = refillTray(emptyRow, current, POOL, createRng(3));
+    expect(idsOf(withDemand)).toEqual(idsOf(withoutDemand));
+  });
+
+  /** Uretici cagirana guvenmez: havuz disi talep gormezden gelinir. */
+  it('havuzda olmayan talebi gormezden gelir', () => {
+    // SHORT.E havuzda YOK (POOL = A,B,C,D).
+    const withBogus = generateTray(emptyRow, POOL, createRng(5), { demand: [SHORT.E] });
+    const without = generateTray(emptyRow, POOL, createRng(5));
+    expect(idsOf(withBogus)).toEqual(idsOf(without));
+  });
+
+  /**
+   * ONCELIK SINAVI: satir baskisi altinda ve tepsi ilerleme tile'ini
+   * TASIMIYORKEN, siparis talebi BEKLEMEK ZORUNDA.
+   */
+  it('satir guvenligi siparisten once gelir', () => {
+    // [A A . .] -> 2 bos slot, SAFETY_THRESHOLD (5) altinda; ilerleme = A.
+    const pressured = row('A', 'A', '.', '.');
+    expect(countEmpty(pressured)).toBeLessThanOrEqual(TRAY.SAFETY_THRESHOLD);
+    expect(findProgressTileIds(pressured, POOL)).toContain(SHORT.A);
+
+    let safetyWins = 0;
+    for (let seed = 1; seed <= 50; seed++) {
+      // Talep D, ama guvenlik A istiyor ve tepsi bos.
+      const tray = generateTray(pressured, POOL, createRng(seed), { demand: [SHORT.D] });
+      expect(idsOf(tray)).toContain(SHORT.A);
+      safetyWins++;
+    }
+
+    expect(safetyWins).toBe(50);
+  });
+
+  /**
+   * Guvenlik SAGLANDIYSA siparis yine kollanir: tepsi ilerleme tile'ini
+   * zaten tasiyorsa zorlanacak yuva bosa gitmemeli.
+   */
+  it('guvenlik saglandiysa siparis yine kollanir', () => {
+    const pressured = row('A', 'A', '.', '.');
+    const current: readonly Tile[] = [createTile(SHORT.A)];
+
+    for (let seed = 1; seed <= 50; seed++) {
+      const tray = refillTray(pressured, current, POOL, createRng(seed), { demand: [SHORT.D] });
+      expect(idsOf(tray)).toContain(SHORT.A);
+      expect(idsOf(tray)).toContain(SHORT.D);
     }
   });
 });

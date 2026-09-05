@@ -1,4 +1,4 @@
-import { LEVEL, SLOTS } from '@/constants/config';
+import { LEVEL, ORDER, SLOTS } from '@/constants/config';
 
 import type { LevelConfig } from './types';
 
@@ -63,6 +63,20 @@ function targetScoreFor(levelNumber: number): number {
   return LEVEL.BASE_TARGET_SCORE + LEVEL.TARGET_SCORE_STEP * (levelNumber - 1);
 }
 
+/**
+ * Level numarasindan servis edilecek musteri sayisi: BASE'den MAX'a dogrusal.
+ *
+ * ZORLUK ARTIK BURADAN GELIYOR, hedef skordan degil. Sprint 2'nin olcumu
+ * netti: eslesme orani 1/3'e civili oldugu icin hedef skoru yukseltmek
+ * seviyeyi zorlastirmiyor, yalnizca UZATIYORDU. Musteri sayisi ise sabir
+ * kisitiyla birlikte calisir -- her musteri ayri bir zaman baskisi getirir.
+ */
+function customerCountFor(levelNumber: number): number {
+  const span = ORDER.MAX_CUSTOMERS - ORDER.BASE_CUSTOMERS;
+  const progress = (levelNumber - 1) / (LEVEL.TOTAL - 1);
+  return ORDER.BASE_CUSTOMERS + Math.round(span * progress);
+}
+
 /** Tek bir seviyenin yapilandirmasi. */
 export function getLevelConfig(levelNumber: number): LevelConfig {
   assertValidLevelNumber(levelNumber);
@@ -71,6 +85,7 @@ export function getLevelConfig(levelNumber: number): LevelConfig {
     slotCount: slotCountFor(levelNumber),
     tileTypeCount: tileTypeCountFor(levelNumber),
     targetScore: targetScoreFor(levelNumber),
+    customerCount: customerCountFor(levelNumber),
   };
 }
 

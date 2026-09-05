@@ -8,14 +8,23 @@ import type { SlotRow, Tile, TileId, Tray } from './types';
 /**
  * Tray uretici -- "no-stuck-state" garantisinin sahibi.
  *
- * Uc katmanli davranis:
- *  1. ILERLEME (zorunlu): bos slot sayisi SAFETY_THRESHOLD'a dustugunde tray,
- *     ya uclu tamamlayan ya da bitisik cift kuran bir tile ICERMEK ZORUNDA.
- *     Oyuncu kendi hatasi olmadan, sirf sansizlik yuzunden kaybetmemeli.
- *  2. TAHTA YANLILIGI: tile'larin bir kismi tahtada ZATEN bulunan tiplerden
+ * Dort katmanli davranis:
+ *  1. SATIR GUVENLIGI (zorunlu): bos slot sayisi SAFETY_THRESHOLD'a
+ *     dustugunde tray, ya uclu tamamlayan ya da bitisik cift kuran bir tile
+ *     ICERMEK ZORUNDA. Oyuncu kendi hatasi olmadan, sirf sansizlik yuzunden
+ *     kaybetmemeli.
+ *  2. SIPARIS ADALETI (Sprint 3): musterinin sabri tukenmek uzereyken,
+ *     siparisin bekledigi tiplerden biri tepsiye konur. Ayni gerekce, farkli
+ *     kaybetme yolu: oyuncu istedigi tip HIC gelmedigi icin musteri
+ *     kaybetmemeli.
+ *  3. TAHTA YANLILIGI: tile'larin bir kismi tahtada ZATEN bulunan tiplerden
  *     secilir. Duz agirlikli rastgele uretim, 9 tipli bir havuzda eslesmeyi
  *     neredeyse imkansiz kilar.
- *  3. AGIRLIKLI RASTGELE: geri kalani tile tanimlarindaki `weight` ile secilir.
+ *  4. AGIRLIKLI RASTGELE: geri kalani tile tanimlarindaki `weight` ile secilir.
+ *
+ * ONCELIK 1 > 2 KESINDIR: seviyeyi tumden kaybetmek (satir dolmasi), bir
+ * musteriyi kaybetmekten kotudur. Satir baskisi altinda tepsi ilerleme
+ * tile'ini tasimiyorsa siparis beklemek zorunda.
  */
 
 /** Bir tile'i belirli bir konuma EKLEMENIN eslesme yaratip yaratmadigi. */
@@ -165,13 +174,25 @@ function chooseForcedTileId(
   tray: readonly Tile[],
   pool: readonly TileId[],
   rng: Rng,
+  demand: readonly TileId[],
 ): TileId | null {
-  if (countEmpty(row) > TRAY.SAFETY_THRESHOLD) return null;
+  // --- 1. SATIR GUVENLIGI (en oncelikli) ---
+  if (countEmpty(row) <= TRAY.SAFETY_THRESHOLD) {
+    const progressIds = findProgressTileIds(row, pool);
+    if (progressIds.length > 0 && !trayCovers(tray, progressIds)) {
+      return rng.pick(progressIds);
+    }
+    // Tepsi ilerlemeyi zaten tasiyorsa siparis katmanina DUSULUR: guvenlik
+    // saglandi, zorlanacak yuva hala siparise ayrilabilir.
+  }
 
-  const progressIds = findProgressTileIds(row, pool);
-  if (progressIds.length === 0 || trayCovers(tray, progressIds)) return null;
+  // --- 2. SIPARIS ADALETI ---
+  // Havuz disi talep gormezden gelinir: siparis havuzdan uretildigi icin
+  // normalde olmaz, ama uretici cagiran tarafa guvenmemeli.
+  const wanted = demand.filter((id) => pool.includes(id));
+  if (wanted.length === 0 || trayCovers(tray, wanted)) return null;
 
-  return rng.pick(progressIds);
+  return rng.pick(wanted);
 }
 
 /**
@@ -185,13 +206,28 @@ function chooseForcedTileId(
  * zayiflatmaz. Ters sira (doldurup sonra bakmak) cesitliligi korurdu fakat
  * no-stuck-state garantisini olasiliga baglardi -- kabul edilemez.
  */
+export interface RefillOptions {
+  /** Hedef tepsi boyutu. */
+  readonly size?: number;
+  /**
+   * ACILEN gereken tile tipleri (siparis adaleti katmani).
+   *
+   * Uretici siparis kavramini bilmez; yalnizca bu listeyi alir. Listeyi
+   * kimin, hangi esikle urettigi `orders.urgentDemand`'in isi -- kural
+   * tek yerde yasasin diye.
+   */
+  readonly demand?: readonly TileId[];
+}
+
 export function refillTray(
   row: SlotRow,
   current: readonly Tile[],
   pool: readonly TileId[],
   rng: Rng,
-  size: number = TRAY.VISIBLE,
+  options: RefillOptions = {},
 ): Tray {
+  const { size = TRAY.VISIBLE, demand = [] } = options;
+
   assertNonEmptyPool(pool);
   if (!Number.isInteger(size) || size <= 0) {
     throw new RangeError(`Tray boyutu pozitif tam sayi olmali, alinan: ${size}`);
@@ -201,7 +237,7 @@ export function refillTray(
   const missing = size - tray.length;
   if (missing <= 0) return tray;
 
-  const forced = chooseForcedTileId(row, tray, pool, rng);
+  const forced = chooseForcedTileId(row, tray, pool, rng, demand);
 
   for (let i = 0; i < missing; i++) {
     tray.push(createTile(pickTileId(row, pool, rng)));
@@ -222,7 +258,7 @@ export function generateTray(
   row: SlotRow,
   pool: readonly TileId[],
   rng: Rng,
-  size: number = TRAY.VISIBLE,
+  options: RefillOptions = {},
 ): Tray {
-  return refillTray(row, [], pool, rng, size);
+  return refillTray(row, [], pool, rng, options);
 }

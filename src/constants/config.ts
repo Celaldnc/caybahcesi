@@ -147,6 +147,96 @@ export const LEVEL = {
   TARGET_SCORE_STEP: 4,
 } as const;
 
+/**
+ * SIPARIS SISTEMI -- Sprint 3'un cekirdegi.
+ *
+ * NEDEN VAR: Sprint 2 sonunda oyun olculebilir bicimde DUZDU. Dusunen
+ * oyuncu L1, L10 ve L30'u %100 kazaniyordu; hamlelerin %66.8'i hicbir sey
+ * getirmiyordu; seviye 30 seviye 1'den zor degil, yalnizca UZUNDU
+ * (21 -> 49 hamle).
+ *
+ * Kok sebep yapisal: eslesme orani 1/3'e CIVILI (hamle basina 1 tile girer,
+ * eslesme basina 3 cikar) ve hicbir ayar bunu degistiremez. Yani zorluk
+ * HIZDAN gelemez, KISITTAN gelmek zorunda. Siparis tam olarak bu: artik
+ * butun eslesmeler esdeger degil, DOGRU eslesme onemli.
+ *
+ * SABIR HAMLE SAYAR, GERCEK ZAMAN DEGIL. Bu bir erisilebilirlik karari:
+ * gercek zamanli sayac, ekran okuyucu kullanicisini etiketleri dinlerken
+ * cezalandirirdi ve Sprint 2'de kurulan duyuru katmanini anlamsizlastirirdi.
+ * Ek fayda: hamle bazli sabir DETERMINISTIK, yani simule edilip
+ * ayarlanabilir -- bu dosyadaki her sayi gibi.
+ *
+ * ASAGIDAKI DEGERLER BASLANGIC TAHMINIDIR, olculup ayarlanacak.
+ */
+export const ORDER = {
+  /** Bir siparisteki en az farkli tile turu. */
+  MIN_LINES: 1,
+  /** Bir siparisteki en fazla farkli tile turu. */
+  MAX_LINES: 2,
+  /**
+   * Bir satirda istenebilecek en fazla eslesme adedi.
+   *
+   * 1'DE TUTULUYOR. Olcum: her birim ~3*T hamlelik ARZ gerektiriyor (asagi
+   * bak), yani 2'ye cikarmak oturumu %40 uzatiyor ama zorlastirmiyor --
+   * hedef skor dersinin aynisi.
+   */
+  MAX_PER_LINE: 1,
+  /**
+   * Her musteriye taban sabir (hamle) -- siparis buyuklugunden bagimsiz pay.
+   */
+  BASE_PATIENCE: 4,
+  /**
+   * Birim basina sabir = PATIENCE_PER_TYPE * tileTypeCount.
+   *
+   * TIP SAYISINI GORMEK ZORUNDA. Olculmus arz yasasi: belirli bir aileden
+   * uclu kurmak icin o aileden 3 tile gerekir; tepsi hamle basina 1 tile
+   * verir ve o tilein aranan aile olma olasiligi ~1/T. Yani BIR birim
+   * ~3*T hamlelik arz demek.
+   *
+   * Sabit bir sabirla ne oldu (olculdu, 300 tohum): dusunen oyuncunun
+   * kazanma orani L1'de %79.7 iken L30'da %1'e cokuyordu -- oyuncu
+   * kotulestigi icin degil, formul tip sayisini gormedigi icin.
+   * 2.4 degeri supurmeyle secildi: L1 %96 -> L30 %83.
+   */
+  PATIENCE_PER_TYPE: 2.4,
+  /**
+   * Ayni anda bekleyen musteri sayisi (masa).
+   *
+   * TEK MASA CALISMIYOR. Olculdu: tek masada oturum 72-104 hamle suruyor
+   * ve hamlelerin yalnizca %11'i siparise dokunuyordu -- yani oyuncu
+   * zamaninin %89'unda hedefiyle ilgisiz is yapiyordu. Uc masa bunu
+   * %22'ye cikarip oturumu 37 hamleye indiriyor.
+   */
+  TABLES: 3,
+  /** Seviye 1'de servis edilmesi gereken musteri sayisi. */
+  BASE_CUSTOMERS: 4,
+  /**
+   * Son seviyede servis edilmesi gereken musteri sayisi.
+   *
+   * 8 DEGIL 6: musteri sayisini artirmak oturumu UZATIYOR, zorlastirmiyor
+   * (L30'da 8 musteri = 147-185 hamle olculdu). Zorluk sabir sikiligindan
+   * gelmeli, nicelikten degil.
+   */
+  MAX_CUSTOMERS: 6,
+  /**
+   * Kac musteri kaybedilince seviye biter.
+   *
+   * Satirin dolmasi HALA kaybettirir; bu IKINCI bir kaybetme yolu.
+   * Sprint 2'de tek kaybetme yolu vardi ve dusunen oyuncu ona hic
+   * dusmuyordu -- yani pratikte kaybetme yolu YOKTU.
+   */
+  MAX_LOST: 3,
+  /**
+   * Sabir bu esigin altina dustugunde uretici siparisi KOLLAMAYA baslar.
+   *
+   * Gerekce, satir guvenligiyle ayni: oyuncu kendi hatasi olmadan, sirf
+   * istedigi tip tepsiye hic gelmedigi icin musteri kaybetmemeli.
+   * ONCELIK SIRASI: once satir guvenligi, sonra siparis adaleti --
+   * seviyeyi tumden kaybetmek, bir musteriyi kaybetmekten kotudur.
+   */
+  DEMAND_PRESSURE: 8,
+} as const;
+
 /** Animasyon sureleri (ms). UI thread'de Reanimated ile calisirlar. */
 export const ANIM = {
   /** Tile'in tray'den slot'a ucus suresi. */
