@@ -1,6 +1,6 @@
 import { ORDER, SLOTS, TRAY } from '@/constants/config';
 
-import { generateTray, refillTray } from '../../generator';
+import { findRescueTileIds, generateTray, refillTray } from '../../generator';
 import {
   createEmptyRow,
   insertPositions,
@@ -20,10 +20,17 @@ import {
   totalRequired,
   urgentDemand,
 } from '../../orders';
+import {
+  applySemaver,
+  canUseSemaver,
+  powersAfterServe,
+  startingPowers,
+  type Powers,
+} from '../../powerups';
 import { createRng, type Rng } from '../../rng';
 import { computeScore } from '../../score';
 import { pickTilePool } from '../../tiles';
-import type { Customer, SlotRow, Tile, TileId } from '../../types';
+import type { Customer, ResolveResult, SlotRow, Tile, TileId, Tray } from '../../types';
 
 /**
  * Test oyuncu politikalari ve oyun simulatoru.
@@ -251,9 +258,88 @@ export interface OrderGameOptions {
   readonly traySize?: number;
   /** Sabir formulunu ezer: birim sayisi -> hamle. Denge suprumu icin. */
   readonly patienceFor?: (units: number) => number;
-  /** Ayni anda bekleyen musteri sayisi (masa sayisi). Varsayilan 1. */
+  /** Ayni anda bekleyen musteri sayisi (masa sayisi). Varsayilan ORDER.TABLES. */
   readonly tables?: number;
+  /** Ozel guc politikasi. Verilmezse guc hic kullanilmaz. */
+  readonly powerPolicy?: PowerPolicy;
 }
+
+/** Semaver karari icin gereken goruntu. */
+export interface PowerContext {
+  readonly row: SlotRow;
+  readonly tray: Tray;
+  readonly customers: readonly Customer[];
+  readonly pool: readonly TileId[];
+}
+
+/** Semaver kullanim karari; null = kullanma. */
+export type PowerPolicy = (
+  ctx: PowerContext,
+) => { readonly trayIndex: number; readonly targetId: TileId } | null;
+
+/** Sirali masalar arasinda, tepside olmayan ve kosulu saglayan ilk tipi bulur. */
+function findTarget(
+  waiting: readonly Customer[],
+  trayIds: readonly TileId[],
+  accept: (id: TileId) => boolean,
+): TileId | null {
+  for (const customer of waiting) {
+    for (const targetId of neededTileIds(customer.order)) {
+      if (trayIds.includes(targetId)) continue;
+      if (accept(targetId)) return targetId;
+    }
+  }
+  return null;
+}
+
+/**
+ * SABIRLI SEMAVER: en degerli ani bekler.
+ *
+ * "Hemen eslesme yaratacaksa harca, yoksa sakla" sezgisi. Yazarken bunun
+ * akillica olacagini varsaydim -- OLCUM REDDETTI (bkz. `promptSemaver`).
+ * Karsilastirma referansi olarak duruyor.
+ */
+export const patientSemaver: PowerPolicy = ({ row, tray, customers }) => {
+  const waiting = customers
+    .filter((c) => neededTileIds(c.order).length > 0)
+    .sort((a, b) => a.patience - b.patience);
+
+  const trayIds = tray.map((t) => t.id);
+  const allNeeded = new Set(customers.flatMap((c) => neededTileIds(c.order)));
+  // Baska masanin bekledigi tile'i feda etme.
+  const sacrificial = trayIds.findIndex((id) => !allNeeded.has(id));
+  const trayIndex = sacrificial === -1 ? 0 : sacrificial;
+
+  const targetId =
+    // 1. ONCELIK: hemen eslesme yaratan donusum -- en degerli kullanim.
+    findTarget(waiting, trayIds, (id) => findRescueTileIds(row, [id]).includes(id)) ??
+    // 2. ONCELIK: tahtada ornegi olan tipe cevir (cift kurar), yalnizca
+    //    sabri azalmis masalar icin.
+    findTarget(
+      waiting.filter((c) => c.patience <= ORDER.DEMAND_PRESSURE),
+      trayIds,
+      (id) => new Set(tilesOf(row).map((t) => t.id)).has(id),
+    );
+
+  return targetId === null ? null : { trayIndex, targetId };
+};
+
+/**
+ * ISTEKLI SEMAVER: sarji gorur gormez, beklenen bir tipe harcar.
+ *
+ * "Savurgan" diye yazilmisti; OLCUM TERSINI GOSTERDI -- her seviyede
+ * sabirli politikayi YENIYOR (L30: %94.0 vs %90.3). Sebep anlasilir:
+ * cevrilen tile eninde sonunda ise yariyor, ama BEKLEMEK musteriyi
+ * kaybetme riskini tasiyor. Yani bu oyunda BIRIKTIRMEK KAYBETTIRIR.
+ *
+ * Ders: bir gucun "dogru kullanimi" tasarimcinin sezgisiyle degil olcumle
+ * belirlenir. Adi da ona gore duzeltildi.
+ */
+export const promptSemaver: PowerPolicy = ({ tray, customers }) => {
+  const needed = [...new Set(customers.flatMap((c) => neededTileIds(c.order)))];
+  if (needed.length === 0 || tray.length === 0) return null;
+  return { trayIndex: 0, targetId: needed[0]! };
+};
 
 export interface OrderGameResult {
   readonly won: boolean;
@@ -267,8 +353,75 @@ export interface OrderGameResult {
   readonly scoringRatio: number;
   /** Siparise katki yapan hamle orani, 0..1. */
   readonly servingRatio: number;
+  /** Kac kez semaver kullanildi. */
+  readonly semaverUsed: number;
   /** Neden bitti. */
   readonly reason: 'kazandi' | 'musteri-bitti' | 'satir-doldu' | 'hamle-bitti';
+}
+
+/**
+ * Guc politikasini danisir ve gecerliyse donusumu uygular.
+ * Kullanilmadiysa `null` -- cagiran taraf sayaci artirmaz.
+ */
+function maybeUseSemaver(
+  policy: PowerPolicy | undefined,
+  powers: Powers,
+  ctx: PowerContext,
+): Tray | null {
+  if (policy === undefined || !canUseSemaver(powers)) return null;
+
+  const action = policy(ctx);
+  if (action === null) return null;
+
+  return applySemaver(ctx.tray, action.trayIndex, action.targetId, ctx.pool);
+}
+
+/**
+ * Hamleyi butun masalara yansitir ve sabri bir azaltir.
+ *
+ * Bir eslesme, o tipi bekleyen HER masaya sayilir. Alternatif (tek masaya
+ * sayma) oyuncuya ek bir secim verirdi ama "ayni anda iki masayi memnun
+ * etme" anini da yok ederdi.
+ */
+function serveTables(
+  customers: readonly Customer[],
+  result: ResolveResult,
+): { readonly customers: readonly Customer[]; readonly servedAny: boolean } {
+  let servedAny = false;
+  const next = customers.map((c) => {
+    const nextOrder = applyResolve(c.order, result);
+    if (nextOrder !== c.order) servedAny = true;
+    // Sabir HER hamlede azalir -- katki yapan masalarda bile.
+    return tickPatience({ ...c, order: nextOrder });
+  });
+  return { customers: next, servedAny };
+}
+
+/** Varsayilanlari tek yerde coz -- `playOrderGame`'in dallanmasi dusuk kalsin. */
+interface ResolvedOptions {
+  readonly maxLost: number;
+  readonly size: number;
+  readonly tables: number;
+  readonly slotCount: number;
+}
+
+function resolveOptions(options: OrderGameOptions): ResolvedOptions {
+  return {
+    maxLost: options.maxLost ?? ORDER.MAX_LOST,
+    size: options.traySize ?? TRAY.VISIBLE,
+    tables: options.tables ?? ORDER.TABLES,
+    slotCount: options.slotCount ?? SLOTS.INITIAL,
+  };
+}
+
+/** Denge supurmesi icin sabir formulunu ezer; ezme yoksa musteriyi aynen doner. */
+function withPatienceOverride(
+  customer: Customer,
+  patienceFor: ((units: number) => number) | undefined,
+): Customer {
+  if (patienceFor === undefined) return customer;
+  const patience = patienceFor(totalRequired(customer.order));
+  return { ...customer, patience, maxPatience: patience };
 }
 
 /** Bir hamle sonrasi musterinin akibeti. */
@@ -288,6 +441,7 @@ interface Tally {
   lost: number;
   scoringMoves: number;
   servingMoves: number;
+  semaverUsed: number;
 }
 
 /** Musteri akibetini sayaclara isler. */
@@ -319,26 +473,24 @@ function toResult(tally: Tally, reason: OrderGameResult['reason']): OrderGameRes
     lost: tally.lost,
     scoringRatio: ratio(tally.scoringMoves),
     servingRatio: ratio(tally.servingMoves),
+    semaverUsed: tally.semaverUsed,
     reason,
   };
 }
 
 /** Siparis modunda bir seviyeyi bastan sona oynar. */
 export function playOrderGame(options: OrderGameOptions): OrderGameResult {
-  const maxLost = options.maxLost ?? ORDER.MAX_LOST;
-  const size = options.traySize ?? TRAY.VISIBLE;
+  const { maxLost, size, tables, slotCount } = resolveOptions(options);
   const rng = createRng(options.seed);
   const pool = pickTilePool(options.poolSize, rng);
 
-  const makeCustomer = (id: string): Customer => {
-    const base = createCustomer(id, createOrder(pool, rng), options.poolSize);
-    if (options.patienceFor === undefined) return base;
-    const patience = options.patienceFor(totalRequired(base.order));
-    return { ...base, patience, maxPatience: patience };
-  };
+  const makeCustomer = (id: string): Customer =>
+    withPatienceOverride(
+      createCustomer(id, createOrder(pool, rng), options.poolSize),
+      options.patienceFor,
+    );
 
-  const tables = options.tables ?? ORDER.TABLES;
-  let row = createEmptyRow(options.slotCount ?? SLOTS.INITIAL);
+  let row = createEmptyRow(slotCount);
   let nextId = 0;
   let customers: Customer[] = Array.from({ length: tables }, () => makeCustomer(`m${nextId++}`));
 
@@ -360,9 +512,27 @@ export function playOrderGame(options: OrderGameOptions): OrderGameResult {
     lost: 0,
     scoringMoves: 0,
     servingMoves: 0,
+    semaverUsed: 0,
   };
 
+  let powers: Powers = startingPowers();
+  let spent = 0;
+
   while (tally.moves < options.maxMoves) {
+    // GUC ONCE: donusum yerlestirmeden ONCE olur, matcher hicbir sey bilmez.
+    const powered = maybeUseSemaver(options.powerPolicy, powers, {
+      row,
+      tray,
+      customers,
+      pool,
+    });
+    if (powered !== null) {
+      tray = powered;
+      spent++;
+      powers = powersAfterServe(spent, tally.served);
+      tally.semaverUsed++;
+    }
+
     const move = options.policy(row, tray, rng, allNeeded());
     if (move === null) return toResult(tally, 'satir-doldu');
 
@@ -372,17 +542,9 @@ export function playOrderGame(options: OrderGameOptions): OrderGameResult {
     tally.score += computeScore(result).total;
     if (result.removedCount > 0) tally.scoringMoves++;
 
-    // Bir eslesme, o tipi bekleyen HER masaya sayilir. Alternatif (tek
-    // masaya sayma) oyuncuya ek bir secim verirdi ama ayni anda iki masayi
-    // memnun etme anini da yok ederdi -- olculup karsilastirilacak.
-    let servedSomething = false;
-    customers = customers.map((c) => {
-      const nextOrder = applyResolve(c.order, result);
-      if (nextOrder !== c.order) servedSomething = true;
-      // Sabir HER hamlede azalir -- katki yapan masalarda bile.
-      return tickPatience({ ...c, order: nextOrder });
-    });
-    if (servedSomething) tally.servingMoves++;
+    const turn = serveTables(customers, result);
+    customers = [...turn.customers];
+    if (turn.servedAny) tally.servingMoves++;
 
     row = result.row;
     tally.moves++;
@@ -393,6 +555,8 @@ export function playOrderGame(options: OrderGameOptions): OrderGameResult {
       recordOutcome(tally, outcome);
       return outcome === 'devam' ? c : makeCustomer(`m${nextId++}`);
     });
+
+    powers = powersAfterServe(spent, tally.served);
 
     const reason = endReason(tally, row, options.customerCount, maxLost);
     if (reason !== null) return toResult(tally, reason);

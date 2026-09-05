@@ -6,10 +6,13 @@ import { neededTileIds, urgentDemand } from '../orders';
 import {
   carelessPolicy,
   orderAwarePolicy,
+  patientSemaver,
   playOrderGame,
+  promptSemaver,
   thoughtfulPolicy,
   type OrderGameResult,
   type Policy,
+  type PowerPolicy,
 } from './helpers/policies';
 
 /**
@@ -37,7 +40,7 @@ interface Summary {
   readonly lostCustomers: number;
 }
 
-function measure(level: number, policy: Policy): Summary {
+function measure(level: number, policy: Policy, powerPolicy?: PowerPolicy): Summary {
   const config = getLevelConfig(level);
   let wins = 0;
   let moves = 0;
@@ -52,6 +55,7 @@ function measure(level: number, policy: Policy): Summary {
       maxMoves: MAX_MOVES,
       policy,
       customerCount: config.customerCount,
+      powerPolicy,
     });
 
     if (result.won) wins++;
@@ -295,5 +299,80 @@ describe('siparis modunda satir guvenligi korunur', () => {
       customerCount: config.customerCount,
     });
     expect(result.reason).toBe('satir-doldu');
+  });
+});
+
+/**
+ * SEMAVER -- AJANS KATMANI.
+ *
+ * Sprint 3a'nin durust bulgusu suydu: siparis sistemi baski ve tempo
+ * getirdi ama AJANS getirmedi -- oyuncu hangi ailenin eslesecegine karar
+ * veremiyordu, ARZ karar veriyordu. Semaver bu zinciri kirar.
+ */
+describe('semaver', () => {
+  it.each([
+    [20, 0.02],
+    [30, 0.01],
+  ])('L%i: semaver kullanmak kullanmamaktan iyidir', (level, minGain) => {
+    const withPower = measure(level, orderAwarePolicy, promptSemaver);
+    const without = measure(level, orderAwarePolicy);
+
+    // Denetimin YAPILDIGINI once iddia et.
+    expect(withPower.games).toBe(SEEDS);
+    expect(without.games).toBe(SEEDS);
+
+    expect(withPower.winRate - without.winRate).toBeGreaterThanOrEqual(minGain);
+  });
+
+  /**
+   * BIRIKTIRMEK KAYBETTIRIR -- olculmus, sezgiye AYKIRI sonuc.
+   *
+   * "Sarji sakla, en degerli anda harca" sezgisiyle yazilan `patientSemaver`
+   * her seviyede `promptSemaver`'a yeniliyor. Sebep: cevrilen tile eninde
+   * sonunda ise yariyor, ama beklemek musteriyi kaybetme riski tasiyor.
+   *
+   * Bu test o dengeyi PINLER. Gun gelip biriktirmek avantajli hale gelirse
+   * (orn. sarj tavani ya da kazanma hizi degisirse) test kirilir ve tasarim
+   * yeniden dusunulmelidir -- sessizce ters donmesin.
+   */
+  it('sarji biriktirmek istekli harcamaktan iyi DEGILDIR', () => {
+    const prompt = measure(30, orderAwarePolicy, promptSemaver);
+    const patient = measure(30, orderAwarePolicy, patientSemaver);
+
+    expect(prompt.games).toBe(SEEDS);
+    expect(prompt.winRate).toBeGreaterThanOrEqual(patient.winRate);
+  });
+
+  it('semaver gercekten kullanilir (olu kol degil)', () => {
+    const config = getLevelConfig(30);
+    let used = 0;
+
+    for (let seed = 1; seed <= SEEDS; seed++) {
+      used += playOrderGame({
+        seed,
+        poolSize: config.tileTypeCount,
+        slotCount: config.slotCount,
+        maxMoves: MAX_MOVES,
+        policy: orderAwarePolicy,
+        customerCount: config.customerCount,
+        powerPolicy: promptSemaver,
+      }).semaverUsed;
+    }
+
+    expect(used).toBeGreaterThan(SEEDS);
+  });
+
+  /** Guc politikasi verilmezse guc HIC kullanilmaz -- sozlesme. */
+  it('guc politikasi yoksa sarj harcanmaz', () => {
+    const config = getLevelConfig(30);
+    const result = playOrderGame({
+      seed: 5,
+      poolSize: config.tileTypeCount,
+      slotCount: config.slotCount,
+      maxMoves: MAX_MOVES,
+      policy: orderAwarePolicy,
+      customerCount: config.customerCount,
+    });
+    expect(result.semaverUsed).toBe(0);
   });
 });

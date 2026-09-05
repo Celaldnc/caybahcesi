@@ -237,6 +237,42 @@ export const ORDER = {
   DEMAND_PRESSURE: 8,
 } as const;
 
+/**
+ * OZEL GUCLER -- ajans katmani.
+ *
+ * NEDEN VAR (olcumle): siparis sistemi baski ve tempo getirdi ama AJANS
+ * getirmedi. Olculdu: siparis-farkinda politika ile siparisi tamamen
+ * umursamayan politika ayni kazaniyordu (L30'da %88.7 vs %87.3), ve tepsiyi
+ * 3'ten 6'ya cikarmak hicbir sey degistirmedi (%11.2 -> %10.5).
+ *
+ * Kok sebep yapisal: belirli bir aileden uclu kurmak ~3*T hamlelik ARZ
+ * gerektiriyor ve oyuncunun bunun uzerinde HICBIR etkisi yok. Yani karar
+ * arzin belirledigi bir seydi, oyuncunun degil.
+ *
+ * SEMAVER tam olarak bunu kirar: tepsideki bir tile'i istedigin aileye
+ * cevirir. Sarj kit oldugu icin "simdi mi harcasam, saklasam mi" sorusu
+ * dogar -- arzin belirlemedigi ILK gercek karar.
+ *
+ * Neden matcher'a joker eklemedik: joker eslesme kurallarini degistirirdi
+ * ve core'un en cok test edilen dosyasini riske atardi. Semaver donusumu
+ * YERLESTIRMEDEN ONCE oluyor; matcher hicbir sey bilmiyor.
+ */
+export const POWER = {
+  /** Seviye basinda verilen semaver sarji. */
+  SEMAVER_START: 1,
+  /**
+   * Kac musteri servis edilince bir sarj kazanilir.
+   *
+   * 2 DEGIL 3 (olcumle duzeltildi). 2 iken sarj o kadar hizli yenileniyordu
+   * ki baskin strateji "gordugun an harca" oluyordu: savurgan politika
+   * akilli politikayi YENIYORDU (L30'da %96.7 vs %89.3). Bedava avantaj
+   * bir tahsis karari degildir; kaynak gercekten kit olmali.
+   */
+  SEMAVER_PER_CUSTOMERS: 3,
+  /** Ayni anda tasinabilecek en fazla sarj. Biriktirip bosa harcama olmasin. */
+  SEMAVER_MAX: 2,
+} as const;
+
 /** Animasyon sureleri (ms). UI thread'de Reanimated ile calisirlar. */
 export const ANIM = {
   /** Tile'in tray'den slot'a ucus suresi. */
