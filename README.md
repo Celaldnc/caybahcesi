@@ -3,7 +3,24 @@
 Türk kültürü temalı casual **triple-match / sort** mobil oyunu.
 Çay bardağı, Türk kahvesi fincanı, nazar boncuğu, lokum, simit… 7 slot, 30 seviye, 30–90 saniyelik oturumlar.
 
-> **Durum:** Sprint 0 tamam (iskelet + araç zinciri + kalite kapıları). Sprint 1 (core oyun mantığı) sırada.
+> **Durum:** Sprint 0–2 tamam (iskelet, core mantık, render + gesture). Sprint 3 sürüyor: sipariş sistemi, masalar, sabır ve semaver.
+
+## Ekran görüntüleri
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/screenshots/01-ana-ekran.png" alt="Ana ekran: başlık, 7 slot ve 30 seviye bilgisi, Oyna butonu" width="240"><br><sub><b>Ana ekran</b></sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/02-oyun.png" alt="Seviye 8: üç masa siparişi, satırda dört tile, tepsiden çay bardağı seçili ve ekleme konumları vurgulu" width="240"><br><sub><b>Ekleme</b> — seçili tile, satırdaki her aralığa eklenebilir</sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/03-semaver.png" alt="Semaver kurulu: masa kartları seçilebilir buton haline gelmiş" width="240"><br><sub><b>Semaver</b> — seçili tile’ı bir masanın istediği tipe çevirir</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/04-karanlik.png" alt="Seviye 15, karanlık tema: sekiz slotlu satırda iki balık çifti arasında bir tile" width="240"><br><sub><b>Karanlık tema</b> — Seviye 15, 8 slot</sub></td>
+    <td align="center"><img src="docs/screenshots/05-bitis.png" alt="Seviye tamamlandı ekranı: 21 hamlede 220 puan, Sonraki seviye butonu" width="240"><br><sub><b>Seviye tamamlandı</b></sub></td>
+    <td></td>
+  </tr>
+</table>
+
+<sub>Web derlemesinden (`npx expo export --platform web`) Playwright ile 390pt genişlikte alındı; `Math.random` tohumlanarak tekrarlanabilir. Birincil hedef iOS/Android’dir, web yalnızca önizleme.</sub>
 
 ---
 
